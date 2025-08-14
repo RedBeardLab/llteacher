@@ -38,24 +38,26 @@ LLTeacher v2 is a redesigned version of the AI-assisted educational platform tha
 ### Project Structure
 ```
 2_llteacher/
-├── apps/
+├── apps/                    # Django applications
 │   ├── accounts/           # User management and authentication
 │   ├── homeworks/          # Homework and section management
-│   ├── conversations/      # AI conversation handling
+│   ├── conversations/      # AI conversation handling and submissions
 │   └── llm/               # LLM configuration and services
 ├── core/                   # Shared utilities and base classes
 ├── services/               # Business logic service layer
 ├── permissions/            # Permission decorators and utilities
-└── llteacher/             # Main Django project
+├── llteacher/             # Main Django project configuration
+├── templates/              # Django templates
+├── static/                 # Static files (CSS, JS, images)
+├── manage.py               # Django management script
+└── pyproject.toml          # Root project configuration
 ```
 
 We are using uv workspaces to manage everything.
 
 @https://docs.astral.sh/uv/concepts/projects/workspaces/
 
-Each apps will be in a separate workspace.
-
-Along with core, services, and permissions.
+Each app will be in a separate workspace along with core, services, and permissions.
 
 ## Data Model Design
 
@@ -264,22 +266,15 @@ class Message(models.Model):
     def is_system_message(self):
         """Check if this is a system message."""
         return self.message_type == self.MESSAGE_TYPE_SYSTEM
-```
-
-### 4. Submission Management (`homeworks` app)
-
-```python
-import uuid
-from django.db import models
 
 class Submission(models.Model):
     """Student submission for a specific section."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    conversation = models.OneToOneField('conversations.Conversation', on_delete=models.CASCADE, related_name='submission')
+    conversation = models.OneToOneField(Conversation, on_delete=models.CASCADE, related_name='submission')
     submitted_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        db_table = 'homeworks_submission'
+        db_table = 'conversations_submission'
         ordering = ['-submitted_at']
     
     def __str__(self):
@@ -309,7 +304,7 @@ class Submission(models.Model):
             raise ValidationError("Student already has a submission for this section.")
 ```
 
-### 5. LLM Configuration (`llm` app)
+### 4. LLM Configuration (`llm` app)
 
 **Simplified Configuration**: The LLMConfig model focuses on essential parameters without provider complexity. This assumes you're using a single, reliable LLM service (like OpenAI) and allows teachers to configure model behavior and prompts for their specific homework needs.
 
@@ -546,7 +541,8 @@ class ConversationService:
 ```python
 from django.db import transaction
 from django.utils import timezone
-from .models import Submission, Section
+from conversations.models import Submission
+from homeworks.models import Section
 
 class SubmissionService:
     """Service class for submission-related business logic."""
@@ -557,7 +553,7 @@ class SubmissionService:
         with transaction.atomic():
             # Check if submission already exists for this user and section
             existing_submission = Submission.objects.filter(
-                student=user,
+                conversation__user=user,
                 conversation__section=conversation.section
             ).first()
             
@@ -569,15 +565,12 @@ class SubmissionService:
             else:
                 # Create new submission
                 return Submission.objects.create(
-                    student=user,
                     conversation=conversation
                 )
     
     @staticmethod
     def auto_submit_overdue_sections():
         """Automatically submit overdue sections for all students."""
-        from django.utils import timezone
-        
         overdue_sections = Section.objects.filter(
             homework__due_date__lt=timezone.now()
         ).select_related('homework')
@@ -705,7 +698,7 @@ urlpatterns = [
     path('test-conversations/<uuid:conversation_id>/', views.TeacherTestConversationView.as_view(), name='teacher-test-conversation'),
     path('test-conversations/<uuid:conversation_id>/delete/', views.TeacherTestDeleteView.as_view(), name='teacher-test-delete'),
     
-    # Submission management
+    # Submission management (now in conversations app)
     path('sections/<uuid:section_id>/submit/', views.SectionSubmitView.as_view(), name='section-submit'),
     path('submissions/<uuid:submission_id>/', views.SubmissionDetailView.as_view(), name='submission-detail'),
 ]
@@ -1295,6 +1288,7 @@ def test_get_homework_list_data_student(self):
 - **Hierarchical Structure**: Homework → Section → Conversation → Submission flow is intuitive
 - **Eliminated Redundancy**: Removed unnecessary fields and complex soft delete logic
 - **Unified User Model**: Single user field in conversations, type determined by user profile
+- **No Circular Dependencies**: Clean separation between homework structure and conversation/submission data
 
 ### 2. **Teacher Testing Capabilities**
 - **Test Conversations**: Teachers can create test conversations to verify AI tutor quality
@@ -1306,6 +1300,7 @@ def test_get_homework_list_data_student(self):
 - **Clear Ownership**: Each conversation belongs to exactly one student and one section
 - **Straightforward Submissions**: Submission simply tracks which conversation represents the final work
 - **Easier Queries**: No need to check multiple fields or handle nullable relationships
+- **Logical Grouping**: Submissions are naturally grouped with conversations since they represent conversation state
 
 ### 4. **Better Performance**
 - **Optimized Queries**: Simpler relationships mean faster database operations
@@ -1316,6 +1311,7 @@ def test_get_homework_list_data_student(self):
 - **Less Code**: Fewer fields and methods to maintain
 - **Clearer Intent**: Each model has a single, well-defined purpose
 - **Easier Testing**: Simpler models are easier to test and debug
+- **Better Separation of Concerns**: Homework structure vs. conversation data are clearly separated
 
 ## Conclusion
 
