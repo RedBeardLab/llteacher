@@ -38,15 +38,15 @@ LLTeacher v2 is a redesigned version of the AI-assisted educational platform tha
 ### Project Structure
 ```
 2_llteacher/
-├── apps/                    # Django applications
+├── apps/                   # Django applications
 │   ├── accounts/           # User management and authentication
 │   ├── homeworks/          # Homework and section management
 │   ├── conversations/      # AI conversation handling and submissions
-│   └── llm/               # LLM configuration and services
+│   └── llm/                # LLM configuration and services
 ├── core/                   # Shared utilities and base classes
 ├── services/               # Business logic service layer
 ├── permissions/            # Permission decorators and utilities
-├── llteacher/             # Main Django project configuration
+├── llteacher/              # Main Django project configuration
 ├── templates/              # Django templates
 ├── static/                 # Static files (CSS, JS, images)
 ├── manage.py               # Django management script
@@ -58,6 +58,10 @@ We are using uv workspaces to manage everything.
 @https://docs.astral.sh/uv/concepts/projects/workspaces/
 
 Each app will be in a separate workspace along with core, services, and permissions.
+
+Each app (including the main application `llteacher`) need to be structured with a `src` directory and inside the `src` directory another directory with the name of the python module.
+
+
 
 ## Data Model Design
 
