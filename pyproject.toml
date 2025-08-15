@@ -1,0 +1,51 @@
+[project]
+name = "llteacher"
+version = "2.0.0"
+description = "AI-assisted educational platform for teachers and students"
+authors = [
+    {name = "LLTeacher Team", email = "team@llteacher.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.2.4",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "accounts",
+    "conversations",
+    "homeworks",
+    "llm",
+    "core",
+    "permissions",
+    "services",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.11,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.uv.workspace]
+members = [
+    "apps/*",
+    "core",
+    "permissions",
+    "services"
+]
+
+[tool.uv.sources]
+accounts = { workspace = true }
+conversations = { workspace = true }
+homeworks = { workspace = true }
+llm = { workspace = true }
+core = { workspace = true }
+permissions = { workspace = true }
+services = { workspace = true }
+
+[tool.uv]
+dev-dependencies = [
+    "pytest",
+    "pytest-django",
+    "black",
+    "flake8",
+    "mypy",
+]
