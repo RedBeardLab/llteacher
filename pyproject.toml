@@ -26,7 +26,10 @@ build-backend = "uv_build"
 
 [tool.uv.workspace]
 members = [
-    "apps/*",
+    "apps/accounts",
+    "apps/conversations",
+    "apps/homeworks",
+    "apps/llm",
     "core",
     "permissions",
     "services"
