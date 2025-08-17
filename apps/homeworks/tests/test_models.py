@@ -22,7 +22,7 @@ class HomeworkModelTest(TestCase):
         self.llm_config = LLMConfig.objects.create(
             name='Test Config',
             model_name='gpt-4',
-            api_key_variable='OPENAI_API_KEY',
+            api_key='test-api-key-12345',
             base_prompt='Test prompt'
         )
         self.homework_data = {

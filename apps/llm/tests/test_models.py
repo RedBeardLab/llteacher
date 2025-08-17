@@ -12,7 +12,7 @@ class LLMConfigModelTest(TestCase):
         self.llm_config_data = {
             'name': 'Test GPT-4 Config',
             'model_name': 'gpt-4',
-            'api_key_variable': 'OPENAI_API_KEY',
+            'api_key': 'test-api-key-12345',
             'base_prompt': 'You are a helpful AI tutor.',
             'temperature': 0.7,
             'max_tokens': 1000,
@@ -25,7 +25,7 @@ class LLMConfigModelTest(TestCase):
         config = LLMConfig.objects.create(**self.llm_config_data)
         self.assertEqual(config.name, 'Test GPT-4 Config')
         self.assertEqual(config.model_name, 'gpt-4')
-        self.assertEqual(config.api_key_variable, 'OPENAI_API_KEY')
+        self.assertEqual(config.api_key, 'test-api-key-12345')
         self.assertEqual(config.base_prompt, 'You are a helpful AI tutor.')
         self.assertEqual(config.temperature, 0.7)
         self.assertEqual(config.max_tokens, 1000)
@@ -60,7 +60,7 @@ class LLMConfigModelTest(TestCase):
         config = LLMConfig.objects.create(
             name='Minimal Config',
             model_name='gpt-3.5-turbo',
-            api_key_variable='OPENAI_API_KEY',
+            api_key='test-api-key-12345',
             base_prompt='Basic prompt'
         )
         self.assertEqual(config.temperature, 0.7)
@@ -84,10 +84,10 @@ class LLMConfigModelTest(TestCase):
         with self.assertRaises(ValidationError):
             config.full_clean()
     
-    def test_llm_config_api_key_variable_required(self):
-        """Test that API key variable is required."""
+    def test_llm_config_api_key_required(self):
+        """Test that API key is required."""
         incomplete_data = self.llm_config_data.copy()
-        del incomplete_data['api_key_variable']
+        del incomplete_data['api_key']
         
         config = LLMConfig(**incomplete_data)
         with self.assertRaises(ValidationError):
@@ -110,7 +110,7 @@ class LLMConfigValidationTest(TestCase):
         self.base_data = {
             'name': 'Test Config',
             'model_name': 'gpt-4',
-            'api_key_variable': 'OPENAI_API_KEY',
+            'api_key': 'test-api-key-12345',
             'base_prompt': 'Test prompt'
         }
     
@@ -191,7 +191,7 @@ class LLMConfigDefaultBehaviorTest(TestCase):
         self.base_data = {
             'name': 'Test Config',
             'model_name': 'gpt-4',
-            'api_key_variable': 'OPENAI_API_KEY',
+            'api_key': 'test-api-key-12345',
             'base_prompt': 'Test prompt'
         }
     
@@ -290,7 +290,7 @@ class LLMConfigEdgeCasesTest(TestCase):
         self.base_data = {
             'name': 'Test Config',
             'model_name': 'gpt-4',
-            'api_key_variable': 'OPENAI_API_KEY',
+            'api_key': 'test-api-key-12345',
             'base_prompt': 'Test prompt'
         }
     
@@ -333,13 +333,13 @@ class LLMConfigEdgeCasesTest(TestCase):
         config = LLMConfig.objects.create(**data)
         self.assertEqual(config.name, long_model)
     
-    def test_very_long_api_key_variable(self):
-        """Test that very long API key variable is allowed."""
-        long_variable = 'A' * 100
+    def test_very_long_api_key(self):
+        """Test that very long API key is allowed."""
+        long_key = 'A' * 100
         data = self.base_data.copy()
-        data['api_key_variable'] = long_variable
+        data['api_key'] = long_key
         config = LLMConfig.objects.create(**data)
-        self.assertEqual(config.api_key_variable, long_variable)
+        self.assertEqual(config.api_key, long_key)
     
     def test_boolean_fields_defaults(self):
         """Test boolean field defaults."""

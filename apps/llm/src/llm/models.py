@@ -8,7 +8,7 @@ class LLMConfig(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
     model_name = models.CharField(max_length=100, help_text="LLM model to use (e.g., 'gpt-4', 'gpt-3.5-turbo')")
-    api_key_variable = models.CharField(max_length=100, help_text="Environment variable name for API key")
+    api_key = models.CharField(max_length=255, help_text="API key for LLM service")
     base_prompt = models.TextField(help_text="Base prompt template for AI tutor")
     temperature = models.FloatField(
         default=0.7, 

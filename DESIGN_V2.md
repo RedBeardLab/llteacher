@@ -14,6 +14,7 @@ LLTeacher v2 is a redesigned version of the AI-assisted educational platform tha
 - **Streamlined Models**: Removed unnecessary fields like bio, progress_notes, and soft delete complexity
 
 ### 2. **Improved Architecture**
+- **Testable-First Approach**: Views return typed dataclasses for clear data contracts and easier testing
 - **Service Layer**: Business logic extracted from views into dedicated service classes
 - **Centralized Permissions**: Unified permission system with decorators
 - **Better Data Integrity**: Cleaner relationships and constraints
@@ -343,58 +344,170 @@ class LLMConfig(models.Model):
         super().save(*args, **kwargs)
 ```
 
+## Testable-First Architecture
+
+### Overview
+
+The system follows a testable-first approach where views return typed dataclasses instead of mixing business logic with presentation. This ensures:
+
+1. **Separation of Concerns**: Business logic is separate from rendering
+2. **Easy Testing**: Data generation methods can be tested independently
+3. **Type Safety**: Clear data contracts with dataclasses
+4. **Reusability**: Same data can be used for HTML, JSON, or other formats
+5. **Maintainability**: Easy to modify data structure without touching templates
+
+### Core Principles
+
+1. **Typed Data Contracts**: Define clear dataclasses for all view data
+2. **Pure Data Methods**: Create methods that return typed data independently of rendering
+3. **Separated Rendering**: Views simply pass typed data to templates
+4. **Testable Components**: Each data generation method can be unit tested
+5. **Service Composition**: Views compose service calls rather than implementing logic
+
+### Implementation Pattern
+
+```python
+from dataclasses import dataclass
+from typing import List, Optional
+from django.http import HttpRequest
+
+# 1. Define typed data contracts
+@dataclass
+class ItemData:
+    id: str
+    title: str
+    # Other fields...
+
+@dataclass
+class ViewData:
+    items: List[ItemData]
+    total_count: int
+    # Other fields...
+
+class ExampleView(View):
+    def get(self, request: HttpRequest):
+        # 2. Get typed data
+        data = self._get_view_data(request.user)
+        
+        # 3. Simple render call
+        return render(request, 'template.html', {'data': data})
+    
+    def _get_view_data(self, user) -> ViewData:
+        # 4. Pure data method - easy to test!
+        # This method has no side effects and returns typed data
+        # ... business logic here ...
+        return ViewData(items=items, total_count=len(items))
+```
+
 ## Service Layer Design
 
 ### 1. Homework Service
 
 ```python
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any
 from django.db import transaction
 from django.utils import timezone
+from uuid import UUID
 from .models import Homework, Section, SectionSolution
+
+# Typed data contracts
+@dataclass
+class SectionCreateData:
+    title: str
+    content: str
+    order: int
+    solution: Optional[str] = None
+
+@dataclass
+class HomeworkCreateData:
+    title: str
+    description: str
+    due_date: Any  # datetime
+    sections: List[SectionCreateData]
+    llm_config: Optional[UUID] = None
+
+@dataclass
+class HomeworkCreateResult:
+    homework_id: UUID
+    section_ids: List[UUID]
+    success: bool = True
+    error: Optional[str] = None
+
+@dataclass
+class SectionProgressData:
+    section_id: UUID
+    title: str
+    order: int
+    status: str  # 'not_started', 'in_progress', 'submitted', 'overdue'
+    conversation_id: Optional[UUID] = None
+
+@dataclass
+class HomeworkProgressData:
+    homework_id: UUID
+    sections_progress: List[SectionProgressData]
+    completed_sections: int = 0
+    total_sections: int = 0
+    
+    def __post_init__(self):
+        self.total_sections = len(self.sections_progress)
+        self.completed_sections = sum(1 for s in self.sections_progress if s.status == 'submitted')
 
 class HomeworkService:
     """Service class for homework-related business logic."""
     
     @staticmethod
-    def create_homework_with_sections(data, teacher):
+    def create_homework_with_sections(data: HomeworkCreateData, teacher) -> HomeworkCreateResult:
         """Create homework with multiple sections."""
-        with transaction.atomic():
-            # Create homework
-            homework = Homework.objects.create(
-                title=data['title'],
-                description=data['description'],
-                due_date=data['due_date'],
-                created_by=teacher,
-                llm_config=data.get('llm_config')
-            )
-            
-            # Create sections
-            sections = []
-            for section_data in data['sections']:
-                section = Section.objects.create(
-                    homework=homework,
-                    title=section_data['title'],
-                    content=section_data['content'],
-                    order=section_data['order']
+        try:
+            with transaction.atomic():
+                # Create homework
+                homework = Homework.objects.create(
+                    title=data.title,
+                    description=data.description,
+                    due_date=data.due_date,
+                    created_by=teacher,
+                    llm_config=data.llm_config
                 )
                 
-                # Create solution if provided
-                if section_data.get('solution'):
-                    solution = SectionSolution.objects.create(
-                        content=section_data['solution']
+                # Create sections
+                section_ids = []
+                for section_data in data.sections:
+                    section = Section.objects.create(
+                        homework=homework,
+                        title=section_data.title,
+                        content=section_data.content,
+                        order=section_data.order
                     )
-                    section.solution = solution
-                    section.save()
+                    
+                    # Create solution if provided
+                    if section_data.solution:
+                        solution = SectionSolution.objects.create(
+                            content=section_data.solution
+                        )
+                        section.solution = solution
+                        section.save()
+                    
+                    section_ids.append(section.id)
                 
-                sections.append(section)
-            
-            return homework, sections
+                return HomeworkCreateResult(
+                    homework_id=homework.id,
+                    section_ids=section_ids
+                )
+        except Exception as e:
+            # Return failure result with error
+            return HomeworkCreateResult(
+                homework_id=None,  # type: ignore
+                section_ids=[],
+                success=False,
+                error=str(e)
+            )
     
     @staticmethod
-    def get_student_homework_progress(student, homework):
+    def get_student_homework_progress(student, homework) -> HomeworkProgressData:
         """Get student's progress on a specific homework."""
         sections = homework.sections.order_by('order')
-        progress = []
+        progress_items = []
         
         for section in sections:
             try:
@@ -402,140 +515,292 @@ class HomeworkService:
                     conversation__user=student.user,
                     conversation__section=section
                 ).first()
+                
                 if submission:
                     status = 'submitted'
-                    conversation = submission.conversation
+                    conversation_id = submission.conversation.id
                 else:
                     # Check if due date has passed for auto-submission
                     if homework.is_overdue:
                         status = 'overdue'
-                        conversation = None
+                        conversation_id = None
                     else:
                         status = 'not_started'
-                        conversation = None
+                        conversation_id = None
             except Exception:
                 status = 'not_started'
-                conversation = None
+                conversation_id = None
             
-            progress.append({
-                'section': section,
-                'status': status,
-                'conversation': conversation
-            })
+            progress_items.append(SectionProgressData(
+                section_id=section.id,
+                title=section.title,
+                order=section.order,
+                status=status,
+                conversation_id=conversation_id
+            ))
         
-        return progress
+        return HomeworkProgressData(
+            homework_id=homework.id,
+            sections_progress=progress_items
+        )
 ```
 
 ### 2. Conversation Service
 
 ```python
+from dataclasses import dataclass
+from typing import List, Optional, Tuple, Any
+from datetime import datetime
+from uuid import UUID
 from django.db import transaction
+from django.contrib.auth import get_user_model
 from .models import Conversation, Message
+from homeworks.models import Section
 from llm.services import LLMService
+
+User = get_user_model()
+
+@dataclass
+class MessageData:
+    id: UUID
+    content: str
+    message_type: str
+    timestamp: datetime
+    is_from_student: bool
+    is_from_ai: bool
+    is_system_message: bool
+
+@dataclass
+class ConversationData:
+    id: UUID
+    user_id: UUID
+    section_id: UUID
+    section_title: str
+    created_at: datetime
+    updated_at: datetime
+    is_teacher_test: bool
+    is_student_conversation: bool
+    messages: Optional[List[MessageData]] = None
+
+@dataclass
+class ConversationStartResult:
+    conversation_id: UUID
+    initial_message_id: UUID
+    section_id: UUID
+    success: bool = True
+    error: Optional[str] = None
+
+@dataclass
+class MessageSendResult:
+    user_message_id: Optional[UUID] = None
+    ai_message_id: Optional[UUID] = None
+    ai_response: Optional[str] = None
+    success: bool = True
+    error: Optional[str] = None
+
+@dataclass
+class CodeExecutionResult:
+    code_message_id: Optional[UUID] = None
+    result_message_id: Optional[UUID] = None
+    has_error: bool = False
+    success: bool = True
+    error: Optional[str] = None
 
 class ConversationService:
     """Service class for conversation-related business logic."""
     
     @staticmethod
-    def start_conversation(user, section):
+    def start_conversation(user: User, section: Section) -> ConversationStartResult:
         """Start a new conversation for a user on a section."""
-        conversation = Conversation.objects.create(
-            user=user,
-            section=section
-        )
-        
-        # Send initial AI message
-        initial_message = ConversationService._create_initial_message(section)
-        Message.objects.create(
-            conversation=conversation,
-            content=initial_message,
-            message_type=Message.MESSAGE_TYPE_AI
-        )
-        
-        return conversation
+        try:
+            # Create conversation
+            conversation = Conversation.objects.create(
+                user=user,
+                section=section
+            )
+            
+            # Send initial AI message
+            initial_message = ConversationService._create_initial_message(section)
+            message = Message.objects.create(
+                conversation=conversation,
+                content=initial_message,
+                message_type=Message.MESSAGE_TYPE_AI
+            )
+            
+            return ConversationStartResult(
+                conversation_id=conversation.id,
+                initial_message_id=message.id,
+                section_id=section.id
+            )
+        except Exception as e:
+            return ConversationStartResult(
+                conversation_id=None,  # type: ignore
+                initial_message_id=None,  # type: ignore
+                section_id=section.id,
+                success=False,
+                error=str(e)
+            )
     
     @staticmethod
-    def send_message(conversation, content, message_type='student'):
+    def send_message(conversation: Conversation, content: str, message_type: str = 'student') -> MessageSendResult:
         """Send a user message and get AI response."""
-        # Save user message
-        user_message = Message.objects.create(
-            conversation=conversation,
-            content=content,
-            message_type=message_type
-        )
-        
-        # Get AI response
-        ai_response = LLMService.get_response(conversation, content, message_type)
-        
-        # Save AI response
-        ai_message = Message.objects.create(
-            conversation=conversation,
-            content=ai_response,
-            message_type=Message.MESSAGE_TYPE_AI
-        )
-        
-        return ai_message
-    
-
+        try:
+            # Save user message
+            user_message = Message.objects.create(
+                conversation=conversation,
+                content=content,
+                message_type=message_type
+            )
+            
+            # Get AI response
+            ai_response = LLMService.get_response(conversation, content, message_type)
+            
+            # Save AI response
+            ai_message = Message.objects.create(
+                conversation=conversation,
+                content=ai_response,
+                message_type=Message.MESSAGE_TYPE_AI
+            )
+            
+            return MessageSendResult(
+                user_message_id=user_message.id,
+                ai_message_id=ai_message.id,
+                ai_response=ai_response
+            )
+        except Exception as e:
+            return MessageSendResult(
+                success=False,
+                error=str(e)
+            )
     
     @staticmethod
-    def add_system_message(conversation, content):
+    def get_conversation_data(conversation_id: UUID) -> Optional[ConversationData]:
+        """Get conversation data including messages."""
+        try:
+            conversation = Conversation.objects.get(id=conversation_id)
+            messages = conversation.messages.all().order_by('timestamp')
+            
+            message_data_list = [
+                MessageData(
+                    id=msg.id,
+                    content=msg.content,
+                    message_type=msg.message_type,
+                    timestamp=msg.timestamp,
+                    is_from_student=msg.is_from_student,
+                    is_from_ai=msg.is_from_ai,
+                    is_system_message=msg.is_system_message
+                ) for msg in messages
+            ]
+            
+            return ConversationData(
+                id=conversation.id,
+                user_id=conversation.user.id,
+                section_id=conversation.section.id,
+                section_title=conversation.section.title,
+                created_at=conversation.created_at,
+                updated_at=conversation.updated_at,
+                is_teacher_test=conversation.is_teacher_test,
+                is_student_conversation=conversation.is_student_conversation,
+                messages=message_data_list
+            )
+        except Conversation.DoesNotExist:
+            return None
+        except Exception:
+            return None
+    
+    @staticmethod
+    def add_system_message(conversation: Conversation, content: str) -> Optional[UUID]:
         """Add a system message to the conversation."""
-        return Message.objects.create(
-            conversation=conversation,
-            content=content,
-            message_type=Message.MESSAGE_TYPE_SYSTEM
-        )
+        try:
+            message = Message.objects.create(
+                conversation=conversation,
+                content=content,
+                message_type=Message.MESSAGE_TYPE_SYSTEM
+            )
+            return message.id
+        except Exception:
+            return None
     
     @staticmethod
-    def delete_teacher_test_conversation(conversation):
+    def delete_teacher_test_conversation(conversation: Conversation) -> bool:
         """Delete a teacher test conversation."""
-        if not conversation.is_teacher_test:
-            raise ValueError("Can only delete teacher test conversations.")
-        
-        conversation.soft_delete()
-        return conversation
+        try:
+            if not conversation.is_teacher_test:
+                raise ValueError("Can only delete teacher test conversations.")
+            
+            conversation.soft_delete()
+            return True
+        except Exception:
+            return False
     
     @staticmethod
-    def get_teacher_test_conversations(teacher, section=None):
+    def get_teacher_test_conversations(teacher: 'Teacher', section: Optional[Section] = None) -> List[ConversationData]:
         """Get teacher test conversations for a teacher."""
-        queryset = teacher.user.conversations.filter(
-            is_deleted=False
-        )
-        
-        if section:
-            queryset = queryset.filter(section=section)
-        
-        return queryset.order_by('-created_at')
+        try:
+            queryset = teacher.user.conversations.filter(
+                is_deleted=False
+            )
+            
+            if section:
+                queryset = queryset.filter(section=section)
+            
+            conversations = queryset.order_by('-created_at')
+            
+            return [
+                ConversationData(
+                    id=conv.id,
+                    user_id=conv.user.id,
+                    section_id=conv.section.id,
+                    section_title=conv.section.title,
+                    created_at=conv.created_at,
+                    updated_at=conv.updated_at,
+                    is_teacher_test=conv.is_teacher_test,
+                    is_student_conversation=conv.is_student_conversation
+                ) for conv in conversations
+            ]
+        except Exception:
+            return []
     
     @staticmethod
-    def handle_r_code_execution(conversation, code, output, error=None):
+    def handle_r_code_execution(conversation: Conversation, code: str, output: str, error: Optional[str] = None) -> CodeExecutionResult:
         """Handle R code execution and add results to conversation."""
-        # Add the R code as a student message
-        code_message = Message.objects.create(
-            conversation=conversation,
-            content=code,
-            message_type=Message.MESSAGE_TYPE_R_CODE
-        )
-        
-        # Add the execution result
-        if error:
-            result_content = f"Error: {error}"
-            result_type = Message.MESSAGE_TYPE_SYSTEM
-        else:
-            result_content = f"Output:\n{output}"
-            result_type = Message.MESSAGE_TYPE_CODE_EXECUTION
-        
-        result_message = Message.objects.create(
-            conversation=conversation,
-            content=result_content,
-            message_type=result_type
-        )
-        
-        return code_message, result_message
+        try:
+            # Add the R code as a student message
+            code_message = Message.objects.create(
+                conversation=conversation,
+                content=code,
+                message_type=Message.MESSAGE_TYPE_R_CODE
+            )
+            
+            # Add the execution result
+            if error:
+                result_content = f"Error: {error}"
+                result_type = Message.MESSAGE_TYPE_SYSTEM
+                has_error = True
+            else:
+                result_content = f"Output:\n{output}"
+                result_type = Message.MESSAGE_TYPE_CODE_EXECUTION
+                has_error = False
+            
+            result_message = Message.objects.create(
+                conversation=conversation,
+                content=result_content,
+                message_type=result_type
+            )
+            
+            return CodeExecutionResult(
+                code_message_id=code_message.id,
+                result_message_id=result_message.id,
+                has_error=has_error
+            )
+        except Exception as e:
+            return CodeExecutionResult(
+                success=False,
+                error=str(e)
+            )
     
     @staticmethod
-    def _create_initial_message(section):
+    def _create_initial_message(section: Section) -> str:
         """Create initial AI message for a section."""
         return f"Hello! I'm here to help you with Section {section.order}: {section.title}. What would you like to work on?"
 ```
@@ -543,60 +808,183 @@ class ConversationService:
 ### 3. Submission Service
 
 ```python
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from uuid import UUID
 from django.db import transaction
 from django.utils import timezone
-from conversations.models import Submission
+from django.contrib.auth import get_user_model
+from conversations.models import Submission, Conversation
 from homeworks.models import Section
+from accounts.models import Student
+
+User = get_user_model()
+
+@dataclass
+class SubmissionResult:
+    submission_id: Optional[UUID] = None
+    conversation_id: Optional[UUID] = None
+    section_id: Optional[UUID] = None
+    is_new: bool = True
+    success: bool = True
+    error: Optional[str] = None
+
+@dataclass
+class SubmissionData:
+    id: UUID
+    conversation_id: UUID
+    section_id: UUID
+    section_title: str
+    student_id: UUID
+    student_name: str
+    submitted_at: datetime
+
+@dataclass
+class AutoSubmitResult:
+    total_sections: int
+    processed_sections: int
+    created_submissions: int
+    error_count: int
+    details: List[Dict[str, Any]]
 
 class SubmissionService:
     """Service class for submission-related business logic."""
     
     @staticmethod
-    def submit_section(user, conversation):
+    def submit_section(user: User, conversation: Conversation) -> SubmissionResult:
         """Submit a section with the selected conversation."""
-        with transaction.atomic():
-            # Check if submission already exists for this user and section
-            existing_submission = Submission.objects.filter(
-                conversation__user=user,
-                conversation__section=conversation.section
-            ).first()
-            
-            if existing_submission:
-                # Update existing submission with new conversation
-                existing_submission.conversation = conversation
-                existing_submission.save()
-                return existing_submission
-            else:
-                # Create new submission
-                return Submission.objects.create(
-                    conversation=conversation
-                )
+        try:
+            with transaction.atomic():
+                # Check if submission already exists for this user and section
+                existing_submission = Submission.objects.filter(
+                    conversation__user=user,
+                    conversation__section=conversation.section
+                ).first()
+                
+                if existing_submission:
+                    # Update existing submission with new conversation
+                    existing_submission.conversation = conversation
+                    existing_submission.save()
+                    return SubmissionResult(
+                        submission_id=existing_submission.id,
+                        conversation_id=conversation.id,
+                        section_id=conversation.section.id,
+                        is_new=False
+                    )
+                else:
+                    # Create new submission
+                    submission = Submission.objects.create(
+                        conversation=conversation
+                    )
+                    return SubmissionResult(
+                        submission_id=submission.id,
+                        conversation_id=conversation.id,
+                        section_id=conversation.section.id,
+                        is_new=True
+                    )
+        except Exception as e:
+            return SubmissionResult(
+                success=False,
+                error=str(e)
+            )
     
     @staticmethod
-    def auto_submit_overdue_sections():
-        """Automatically submit overdue sections for all students."""
-        overdue_sections = Section.objects.filter(
-            homework__due_date__lt=timezone.now()
-        ).select_related('homework')
-        
-        for section in overdue_sections:
-            # Find students without submissions for this section
-            students_without_submissions = section.homework.students.exclude(
-                submissions__conversation__section=section
+    def get_submission_data(submission_id: UUID) -> Optional[SubmissionData]:
+        """Get detailed submission data."""
+        try:
+            submission = Submission.objects.get(id=submission_id)
+            return SubmissionData(
+                id=submission.id,
+                conversation_id=submission.conversation.id,
+                section_id=submission.conversation.section.id,
+                section_title=submission.conversation.section.title,
+                student_id=submission.conversation.user.student_profile.id,
+                student_name=f"{submission.conversation.user.first_name} {submission.conversation.user.last_name}",
+                submitted_at=submission.submitted_at
             )
+        except Submission.DoesNotExist:
+            return None
+        except Exception:
+            return None
+    
+    @staticmethod
+    def auto_submit_overdue_sections() -> AutoSubmitResult:
+        """Automatically submit overdue sections for all students."""
+        results = {
+            'total_sections': 0,
+            'processed_sections': 0,
+            'created_submissions': 0,
+            'error_count': 0,
+            'details': []
+        }
+        
+        try:
+            # Get all overdue sections
+            overdue_sections = Section.objects.filter(
+                homework__due_date__lt=timezone.now()
+            ).select_related('homework')
             
-            for student in students_without_submissions:
-                # Find their most recent conversation for this section
-                try:
-                    conversation = section.conversations.filter(
-                        user=student.user
-                    ).latest('created_at')
-                    
-                    # Auto-submit
-                    SubmissionService.submit_section(student.user, conversation)
-                except Conversation.DoesNotExist:
-                    # No conversation exists, skip
-                    pass
+            results['total_sections'] = overdue_sections.count()
+            
+            for section in overdue_sections:
+                results['processed_sections'] += 1
+                section_result = {
+                    'section_id': str(section.id),
+                    'homework_id': str(section.homework.id),
+                    'students_processed': 0,
+                    'submissions_created': 0,
+                    'errors': 0
+                }
+                
+                # Find students without submissions for this section
+                students_without_submissions = Student.objects.filter(
+                    user__in=section.homework.students
+                ).exclude(
+                    user__conversations__submission__conversation__section=section
+                )
+                
+                for student in students_without_submissions:
+                    section_result['students_processed'] += 1
+                    # Find their most recent conversation for this section
+                    try:
+                        conversation = section.conversations.filter(
+                            user=student.user
+                        ).latest('created_at')
+                        
+                        # Auto-submit
+                        submission_result = SubmissionService.submit_section(student.user, conversation)
+                        if submission_result.success:
+                            results['created_submissions'] += 1
+                            section_result['submissions_created'] += 1
+                        else:
+                            results['error_count'] += 1
+                            section_result['errors'] += 1
+                            
+                    except Conversation.DoesNotExist:
+                        # No conversation exists, skip
+                        pass
+                    except Exception:
+                        results['error_count'] += 1
+                        section_result['errors'] += 1
+                
+                results['details'].append(section_result)
+                
+            return AutoSubmitResult(
+                total_sections=results['total_sections'],
+                processed_sections=results['processed_sections'],
+                created_submissions=results['created_submissions'],
+                error_count=results['error_count'],
+                details=results['details']
+            )
+        except Exception as e:
+            return AutoSubmitResult(
+                total_sections=0,
+                processed_sections=0,
+                created_submissions=0,
+                error_count=1,
+                details=[{'error': str(e)}]
+            )
 ```
 
 ## Permission System
@@ -711,116 +1099,403 @@ urlpatterns = [
 ### 2. View Classes
 
 ```python
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
-from django.contrib.auth.mixins import LoginRequiredMixin
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any
+from uuid import UUID
+from django.views import View
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+from django.http import HttpRequest, HttpResponse
 from permissions.decorators import teacher_required, student_required
+from accounts.models import get_teacher_or_student
+from homeworks.models import Homework
+from homeworks.services import HomeworkService
 
-class HomeworkListView(LoginRequiredMixin, ListView):
-    """Display homeworks based on user role."""
-    model = Homework
-    template_name = 'homeworks/homework_list.html'
-    context_object_name = 'homeworks'
-    
-    def get_queryset(self):
-        teacher, student = get_teacher_or_student(self.request.user)
-        
-        if teacher:
-            return Homework.objects.filter(created_by=teacher).order_by('-created_at')
-        elif student:
-            return Homework.objects.filter(sections__isnull=False).distinct().order_by('-created_at')
-        else:
-            return Homework.objects.none()
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        teacher, student = get_teacher_or_student(self.request.user)
-        
-        if student:
-            # Add progress information for each homework
-            for homework in context['homeworks']:
-                homework.progress = SubmissionService.get_student_homework_progress(student, homework)
-        
-        return context
+@dataclass
+class HomeworkListItem:
+    id: UUID
+    title: str
+    description: str
+    due_date: Any  # datetime
+    section_count: int
+    created_at: Any  # datetime
+    is_overdue: bool
+    progress: Optional[List[Dict[str, Any]]] = None
 
-class SectionSubmitView(LoginRequiredMixin, View):
-    """Submit a section with the selected conversation."""
-    
-    @student_required
-    def post(self, request, section_id):
-        section = get_object_or_404(Section, id=section_id)
-        conversation_id = request.POST.get('conversation_id')
-        
-        try:
-            conversation = Conversation.objects.get(
-                id=conversation_id,
-                student=request.user.student_profile,
-                section=section
-            )
-            
-            submission = SubmissionService.submit_section(
-                request.user,
-                conversation
-            )
-            
-            messages.success(request, f"Section '{section.title}' submitted successfully!")
-            return redirect('section-detail', section_id=section_id)
-            
-        except Conversation.DoesNotExist:
-            messages.error(request, "Invalid conversation selected.")
-            return redirect('section-detail', section_id=section_id)
+@dataclass
+class HomeworkListData:
+    homeworks: List[HomeworkListItem]
+    user_type: str  # 'teacher', 'student', or 'unknown'
+    total_count: int
+    has_progress_data: bool
 
-class TeacherTestStartView(LoginRequiredMixin, View):
-    """Start a teacher test conversation for a section."""
+@method_decorator(login_required, name='dispatch')
+class HomeworkListView(View):
+    """Display homeworks based on user role using testable-first approach."""
     
-    @teacher_required
-    @section_access_required
-    def post(self, request, section):
-        try:
-            conversation = ConversationService.start_conversation(
-                request.user,
-                section
-            )
-            messages.success(request, f"Test conversation started for '{section.title}'")
-            return redirect('teacher-test-conversation', conversation_id=conversation.id)
-        except Exception as e:
-            messages.error(request, f"Failed to start test conversation: {e}")
-            return redirect('section-detail', section_id=section.id)
-
-class TeacherTestConversationView(LoginRequiredMixin, View):
-    """View and interact with a teacher test conversation."""
-    
-    @teacher_required
-    def get(self, request, conversation_id):
-        conversation = get_object_or_404(Conversation, id=conversation_id)
+    def get(self, request: HttpRequest) -> HttpResponse:
+        # Get typed data
+        data = self._get_homework_list_data(request.user)
         
-        # Ensure teacher owns this test conversation
-        if not conversation.is_teacher_test or conversation.user != request.user:
-            return HttpResponseForbidden("Access denied.")
-        
-        return render(request, 'conversations/teacher_test_conversation.html', {
-            'conversation': conversation,
-            'section': conversation.section,
-            'homework': conversation.section.homework
+        # Single render call with data
+        return render(request, 'homeworks/homework_list.html', {
+            'data': data
         })
     
-    @teacher_required
-    def post(self, request, conversation_id):
-        conversation = get_object_or_404(Conversation, id=conversation_id)
-        content = request.POST.get('content')
+    def _get_homework_list_data(self, user) -> HomeworkListData:
+        """Get typed data for homework list. Easy to test!"""
+        teacher, student = get_teacher_or_student(user)
+        has_progress_data = False
         
-        if not content:
-            messages.error(request, "Message content is required.")
-            return redirect('teacher-test-conversation', conversation_id=conversation.id)
+        if teacher:
+            homeworks = Homework.objects.filter(created_by=teacher).order_by('-created_at')
+            user_type = 'teacher'
+        elif student:
+            homeworks = Homework.objects.filter(sections__isnull=False).distinct().order_by('-created_at')
+            user_type = 'student'
+            has_progress_data = True
+        else:
+            homeworks = Homework.objects.none()
+            user_type = 'unknown'
         
-        try:
-            ai_response = ConversationService.send_message(
-                conversation, content, 'student'
+        # Build typed data
+        homework_items = []
+        for homework in homeworks:
+            progress = None
+            
+            if student:
+                # Get progress data for student
+                progress_data = HomeworkService.get_student_homework_progress(student, homework)
+                # Convert to list of dicts for template rendering
+                progress = [
+                    {
+                        'section_id': str(p.section_id),
+                        'title': p.title,
+                        'order': p.order,
+                        'status': p.status,
+                        'conversation_id': str(p.conversation_id) if p.conversation_id else None
+                    } for p in progress_data.sections_progress
+                ]
+            
+            homework_item = HomeworkListItem(
+                id=homework.id,
+                title=homework.title,
+                description=homework.description,
+                due_date=homework.due_date,
+                section_count=homework.section_count,
+                created_at=homework.created_at,
+                is_overdue=homework.is_overdue,
+                progress=progress
             )
-            messages.success(request, "Message sent successfully!")
-        except Exception as e:
-            messages.error(request, f"Failed to send message: {e}")
+            homework_items.append(homework_item)
         
-        return redirect('teacher-test-conversation', conversation_id=conversation.id)
+        return HomeworkListData(
+            homeworks=homework_items,
+            user_type=user_type,
+            total_count=len(homework_items),
+            has_progress_data=has_progress_data
+        )
+
+@dataclass
+class SectionSubmitData:
+    section_id: UUID
+    section_title: str
+    conversation_id: Optional[UUID] = None
+    error: Optional[str] = None
+
+@dataclass
+class SectionSubmitResult:
+    success: bool
+    submission_id: Optional[UUID] = None
+    section_id: Optional[UUID] = None
+    section_title: Optional[str] = None
+    error_message: Optional[str] = None
+
+@method_decorator(login_required, name='dispatch')
+class SectionSubmitView(View):
+    """Submit a section with the selected conversation using testable-first approach."""
+    
+    @method_decorator(student_required)
+    def post(self, request: HttpRequest, section_id: str) -> HttpResponse:
+        # Convert input data to typed object
+        input_data = self._get_submit_data(request, section_id)
+        
+        # Process the submission
+        result = self._process_submission(request.user, input_data)
+        
+        # Handle result
+        if result.success:
+            messages.success(request, f"Section '{result.section_title}' submitted successfully!")
+        else:
+            messages.error(request, result.error_message or "Failed to submit section.")
+            
+        return redirect('section-detail', section_id=section_id)
+    
+    def _get_submit_data(self, request: HttpRequest, section_id: str) -> SectionSubmitData:
+        """Parse and validate input data. Easy to test!"""
+        try:
+            section = get_object_or_404(Section, id=section_id)
+            conversation_id = request.POST.get('conversation_id')
+            
+            if not conversation_id:
+                return SectionSubmitData(
+                    section_id=section.id,
+                    section_title=section.title,
+                    error="No conversation selected."
+                )
+                
+            return SectionSubmitData(
+                section_id=section.id,
+                section_title=section.title,
+                conversation_id=UUID(conversation_id)
+            )
+        except Exception as e:
+            return SectionSubmitData(
+                section_id=UUID(section_id) if section_id else None,  # type: ignore
+                section_title="",
+                error=str(e)
+            )
+    
+    def _process_submission(self, user: User, data: SectionSubmitData) -> SectionSubmitResult:
+        """Process the submission with error handling. Easy to test!"""
+        if data.error:
+            return SectionSubmitResult(
+                success=False,
+                section_id=data.section_id,
+                section_title=data.section_title,
+                error_message=data.error
+            )
+            
+        try:
+            # Get conversation
+            conversation = Conversation.objects.get(
+                id=data.conversation_id,
+                user=user,
+                section_id=data.section_id
+            )
+            
+            # Submit section
+            result = SubmissionService.submit_section(user, conversation)
+            
+            if result.success:
+                return SectionSubmitResult(
+                    success=True,
+                    submission_id=result.submission_id,
+                    section_id=data.section_id,
+                    section_title=data.section_title
+                )
+            else:
+                return SectionSubmitResult(
+                    success=False,
+                    section_id=data.section_id,
+                    section_title=data.section_title,
+                    error_message=result.error or "Failed to create submission."
+                )
+                
+        except Conversation.DoesNotExist:
+            return SectionSubmitResult(
+                success=False,
+                section_id=data.section_id,
+                section_title=data.section_title,
+                error_message="Invalid conversation selected."
+            )
+        except Exception as e:
+            return SectionSubmitResult(
+                success=False,
+                section_id=data.section_id,
+                section_title=data.section_title,
+                error_message=str(e)
+            )
+
+@dataclass
+class TeacherTestStartData:
+    section_id: UUID
+    section_title: str
+    user_id: UUID
+
+@dataclass
+class TeacherTestStartResult:
+    success: bool
+    conversation_id: Optional[UUID] = None
+    section_title: Optional[str] = None
+    error_message: Optional[str] = None
+    section_id: Optional[UUID] = None
+
+@method_decorator(login_required, name='dispatch')
+class TeacherTestStartView(View):
+    """Start a teacher test conversation for a section using testable-first approach."""
+    
+    @method_decorator(teacher_required)
+    @method_decorator(section_access_required)
+    def post(self, request: HttpRequest, section: Section) -> HttpResponse:
+        # Convert input to typed data
+        input_data = TeacherTestStartData(
+            section_id=section.id,
+            section_title=section.title,
+            user_id=request.user.id
+        )
+        
+        # Process the request
+        result = self._start_test_conversation(request.user, input_data)
+        
+        # Handle result
+        if result.success:
+            messages.success(request, f"Test conversation started for '{result.section_title}'")
+            return redirect('teacher-test-conversation', conversation_id=result.conversation_id)
+        else:
+            messages.error(request, result.error_message or "Failed to start test conversation")
+            return redirect('section-detail', section_id=result.section_id)
+    
+    def _start_test_conversation(self, user: User, data: TeacherTestStartData) -> TeacherTestStartResult:
+        """Start a test conversation with error handling. Easy to test!"""
+        try:
+            section = Section.objects.get(id=data.section_id)
+            result = ConversationService.start_conversation(user, section)
+            
+            if result.success:
+                return TeacherTestStartResult(
+                    success=True,
+                    conversation_id=result.conversation_id,
+                    section_title=data.section_title,
+                    section_id=data.section_id
+                )
+            else:
+                return TeacherTestStartResult(
+                    success=False,
+                    section_id=data.section_id,
+                    section_title=data.section_title,
+                    error_message=result.error
+                )
+        except Exception as e:
+            return TeacherTestStartResult(
+                success=False,
+                section_id=data.section_id,
+                section_title=data.section_title,
+                error_message=f"Failed to start test conversation: {str(e)}"
+            )
+
+@dataclass
+class TeacherTestConversationData:
+    conversation_id: UUID
+    section_id: UUID
+    homework_id: UUID
+    section_title: str
+    homework_title: str
+    messages: List[MessageData]
+    is_teacher_test: bool
+
+@dataclass
+class TeacherTestMessageData:
+    conversation_id: UUID
+    content: str
+    message_type: str = 'student'
+
+@method_decorator(login_required, name='dispatch')
+class TeacherTestConversationView(View):
+    """View and interact with a teacher test conversation using testable-first approach."""
+    
+    @method_decorator(teacher_required)
+    def get(self, request: HttpRequest, conversation_id: str) -> HttpResponse:
+        # Get conversation data
+        conversation_data = self._get_conversation_data(request.user, conversation_id)
+        
+        # Check access permissions
+        if not conversation_data or not conversation_data.is_teacher_test:
+            return HttpResponseForbidden("Access denied.")
+        
+        # Render with typed data
+        return render(request, 'conversations/teacher_test_conversation.html', {
+            'data': conversation_data
+        })
+    
+    @method_decorator(teacher_required)
+    def post(self, request: HttpRequest, conversation_id: str) -> HttpResponse:
+        # Parse input data
+        message_data = self._parse_message_data(request, conversation_id)
+        
+        # Validate access
+        conversation_data = self._get_conversation_data(request.user, conversation_id)
+        if not conversation_data or not conversation_data.is_teacher_test:
+            return HttpResponseForbidden("Access denied.")
+        
+        # Validate content
+        if not message_data.content:
+            messages.error(request, "Message content is required.")
+            return redirect('teacher-test-conversation', conversation_id=conversation_id)
+        
+        # Process message
+        result = self._send_test_message(message_data)
+        
+        # Handle result
+        if result.success:
+            messages.success(request, "Message sent successfully!")
+        else:
+            messages.error(request, result.error or "Failed to send message.")
+        
+        return redirect('teacher-test-conversation', conversation_id=conversation_id)
+    
+    def _get_conversation_data(self, user: User, conversation_id: str) -> Optional[TeacherTestConversationData]:
+        """Get conversation data with access control. Easy to test!"""
+        try:
+            # Get raw conversation
+            conversation = Conversation.objects.get(id=conversation_id)
+            
+            # Check ownership
+            if not conversation.is_teacher_test or conversation.user != user:
+                return None
+                
+            # Get conversation data from service
+            conversation_data = ConversationService.get_conversation_data(conversation.id)
+            
+            if not conversation_data:
+                return None
+                
+            # Transform to view-specific data
+            return TeacherTestConversationData(
+                conversation_id=conversation_data.id,
+                section_id=conversation_data.section_id,
+                homework_id=conversation.section.homework.id,
+                section_title=conversation_data.section_title,
+                homework_title=conversation.section.homework.title,
+                messages=conversation_data.messages or [],
+                is_teacher_test=conversation_data.is_teacher_test
+            )
+        except Conversation.DoesNotExist:
+            return None
+        except Exception:
+            return None
+    
+    def _parse_message_data(self, request: HttpRequest, conversation_id: str) -> TeacherTestMessageData:
+        """Parse message data from request. Easy to test!"""
+        content = request.POST.get('content', '')
+        return TeacherTestMessageData(
+            conversation_id=UUID(conversation_id),
+            content=content
+        )
+    
+    def _send_test_message(self, data: TeacherTestMessageData) -> MessageSendResult:
+        """Send a test message. Easy to test!"""
+        try:
+            # Get conversation
+            conversation = Conversation.objects.get(id=data.conversation_id)
+            
+            # Send message using service
+            return ConversationService.send_message(
+                conversation=conversation,
+                content=data.content,
+                message_type=data.message_type
+            )
+        except Conversation.DoesNotExist:
+            return MessageSendResult(
+                success=False,
+                error="Conversation not found."
+            )
+        except Exception as e:
+            return MessageSendResult(
+                success=False,
+                error=f"Failed to send message: {str(e)}"
+            )
 
 class TeacherTestDeleteView(LoginRequiredMixin, View):
     """Delete a teacher test conversation."""
@@ -890,9 +1565,12 @@ class Migration(migrations.Migration):
 # tests/test_services.py
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from unittest.mock import patch
+from django.utils import timezone
+from datetime import timedelta
+from unittest.mock import patch, MagicMock
 from homeworks.services import HomeworkService
-from homeworks.models import Homework, Section
+from homeworks.models import Homework, Section, SectionSolution, Teacher
+from homeworks.services import HomeworkCreateData, SectionCreateData, HomeworkCreateResult
 
 class HomeworkServiceTests(TestCase):
     def setUp(self):
@@ -902,39 +1580,112 @@ class HomeworkServiceTests(TestCase):
         )
         self.teacher = Teacher.objects.create(user=self.user)
         
-        self.homework_data = {
-            'title': 'Test Homework',
-            'description': 'Test Description',
-            'due_date': timezone.now() + timedelta(days=7),
-            'sections': [
-                {
-                    'title': 'Section 1',
-                    'content': 'Test content 1',
-                    'order': 1,
-                    'solution': 'Test solution 1'
-                },
-                {
-                    'title': 'Section 2',
-                    'content': 'Test content 2',
-                    'order': 2,
-                    'solution': 'Test solution 2'
-                }
-            ]
-        }
+        # Create typed input data
+        self.section1 = SectionCreateData(
+            title='Section 1',
+            content='Test content 1',
+            order=1,
+            solution='Test solution 1'
+        )
+        
+        self.section2 = SectionCreateData(
+            title='Section 2',
+            content='Test content 2',
+            order=2,
+            solution='Test solution 2'
+        )
+        
+        self.homework_data = HomeworkCreateData(
+            title='Test Homework',
+            description='Test Description',
+            due_date=timezone.now() + timedelta(days=7),
+            sections=[self.section1, self.section2]
+        )
     
     def test_create_homework_with_sections(self):
-        """Test creating homework with multiple sections."""
-        homework, sections = HomeworkService.create_homework_with_sections(
+        """Test creating homework with multiple sections using typed data."""
+        # Execute the service method
+        result = HomeworkService.create_homework_with_sections(
             self.homework_data, 
             self.teacher
         )
         
-        self.assertEqual(homework.title, self.homework_data['title'])
+        # Check result type and success
+        self.assertIsInstance(result, HomeworkCreateResult)
+        self.assertTrue(result.success)
+        self.assertIsNotNone(result.homework_id)
+        self.assertEqual(len(result.section_ids), 2)
+        
+        # Verify created objects
+        homework = Homework.objects.get(id=result.homework_id)
+        self.assertEqual(homework.title, self.homework_data.title)
+        
+        sections = Section.objects.filter(homework=homework).order_by('order')
         self.assertEqual(sections.count(), 2)
         self.assertEqual(sections[0].order, 1)
         self.assertEqual(sections[1].order, 2)
         self.assertIsNotNone(sections[0].solution)
         self.assertIsNotNone(sections[1].solution)
+
+# tests/test_views.py
+from django.test import TestCase, RequestFactory
+from django.contrib.auth import get_user_model
+from homeworks.views import HomeworkListView
+from homeworks.models import Homework
+from homeworks.services import HomeworkProgressData, SectionProgressData
+
+class HomeworkListViewTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = get_user_model().objects.create_user(
+            username='testuser',
+            password='testpass123'
+        )
+    
+    def test_get_homework_list_data(self):
+        """Test the data generation method independently."""
+        # Create a view instance
+        view = HomeworkListView()
+        
+        # Execute the data generation method directly
+        data = view._get_homework_list_data(self.user)
+        
+        # Verify the structure and content of data
+        self.assertIsNotNone(data)
+        self.assertEqual(data.user_type, 'unknown')
+        self.assertEqual(data.total_count, 0)
+        self.assertEqual(len(data.homeworks), 0)
+    
+    @patch('homeworks.services.HomeworkService.get_student_homework_progress')
+    def test_student_homework_progress(self, mock_get_progress):
+        """Test student homework progress data."""
+        # Setup mock
+        mock_section_progress = [
+            SectionProgressData(
+                section_id=MagicMock(),
+                title="Test Section",
+                order=1,
+                status="not_started"
+            )
+        ]
+        
+        mock_progress_data = HomeworkProgressData(
+            homework_id=MagicMock(),
+            sections_progress=mock_section_progress
+        )
+        
+        mock_get_progress.return_value = mock_progress_data
+        
+        # Create view with student user
+        view = HomeworkListView()
+        
+        # Call method under test with mocked dependencies
+        # This is the power of testable-first approach - we can test data logic
+        # without needing HTTP requests or templates
+        data = view._get_homework_list_data(self.user)
+        
+        # Assert on the result
+        self.assertIsNotNone(data)
 ```
 
 ## Deployment Configuration
@@ -1081,173 +1832,11 @@ class SectionAccessMixin:
             return HttpResponseForbidden("Access denied.")
 ```
 
-## Testable-First Architecture
+## Template Usage with Typed Data
 
-### Overview
+One of the key advantages of the testable-first architecture is how it simplifies templates. By receiving well-defined typed data structures, templates become cleaner and more predictable.
 
-The system follows a testable-first approach where views return typed dataclasses instead of mixing business logic with presentation. This ensures:
-
-1. **Separation of Concerns**: Business logic is separate from rendering
-2. **Easy Testing**: Data generation methods can be tested independently
-3. **Type Safety**: Clear data contracts with dataclasses
-4. **Reusability**: Same data can be used for HTML, JSON, or other formats
-5. **Maintainability**: Easy to modify data structure without touching templates
-
-### Example: Homework List View
-
-#### **Current Approach (Mixed Concerns)**:
-```python
-class HomeworkListView(LoginRequiredMixin, ListView):
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        teacher, student = get_teacher_or_student(self.request.user)
-        
-        if student:
-            # Add progress information for each homework
-            for homework in context['homeworks']:
-                homework.progress = SubmissionService.get_student_homework_progress(student, homework)
-        
-        return context
-```
-
-#### **New Approach (Testable First)**:
-```python
-from dataclasses import dataclass
-from typing import List, Optional
-from django.http import HttpRequest
-
-@dataclass
-class SectionProgress:
-    section_id: str
-    title: str
-    status: str  # 'not_started', 'in_progress', 'submitted', 'overdue'
-    conversation_id: Optional[str] = None
-
-@dataclass
-class HomeworkListItem:
-    id: str
-    title: str
-    description: str
-    due_date: datetime
-    section_count: int
-    progress: Optional[List[SectionProgress]] = None
-
-@dataclass
-class HomeworkListData:
-    homeworks: List[HomeworkListItem]
-    user_type: str  # 'teacher' or 'student'
-    total_count: int
-
-class HomeworkListView(LoginRequiredMixin, View):
-    def get(self, request: HttpRequest):
-        # Get typed data
-        data = self._get_homework_list_data(request.user)
-        
-        # Single render call
-        return render(request, 'homeworks/homework_list.html', {
-            'data': data
-        })
-    
-    def _get_homework_list_data(self, user) -> HomeworkListData:
-        """Get typed data for homework list. Easy to test!"""
-        teacher, student = get_teacher_or_student(user)
-        
-        if teacher:
-            homeworks = Homework.objects.filter(created_by=teacher).order_by('-created_at')
-            user_type = 'teacher'
-        elif student:
-            homeworks = Homework.objects.filter(sections__isnull=False).distinct().order_by('-created_at')
-            user_type = 'student'
-        else:
-            homeworks = Homework.objects.none()
-            user_type = 'unknown'
-        
-        # Build typed data
-        homework_items = []
-        for homework in homeworks:
-            progress = None
-            if student:
-                progress = self._build_section_progress(student, homework)
-            
-            homework_item = HomeworkListItem(
-                id=str(homework.id),
-                title=homework.title,
-                description=homework.description,
-                due_date=homework.due_date,
-                section_count=homework.section_count,
-                progress=progress
-            )
-            homework_items.append(homework_item)
-        
-        return HomeworkListData(
-            homeworks=homework_items,
-            user_type=user_type,
-            total_count=len(homework_items)
-        )
-    
-    def _build_section_progress(self, student, homework) -> List[SectionProgress]:
-        """Build typed section progress data. Easy to test!"""
-        progress = []
-        sections = homework.sections.order_by('order')
-        
-        for section in sections:
-            try:
-                submission = Submission.objects.filter(
-                    conversation__user=student.user,
-                    conversation__section=section
-                ).first()
-                
-                if submission:
-                    status = 'submitted'
-                    conversation_id = str(submission.conversation.id)
-                else:
-                    if homework.is_overdue:
-                        status = 'overdue'
-                        conversation_id = None
-                    else:
-                        status = 'not_started'
-                        conversation_id = None
-            except Exception:
-                status = 'not_started'
-                conversation_id = None
-            
-            progress.append(SectionProgress(
-                section_id=str(section.id),
-                title=section.title,
-                status=status,
-                conversation_id=conversation_id
-            ))
-        
-        return progress
-```
-
-### Benefits of This Approach
-
-1. **Testable**: You can test `_get_homework_list_data()` with mock data
-2. **Typed**: Clear data contracts with dataclasses
-3. **Separated Concerns**: Business logic separate from rendering
-4. **Reusable**: Data can be used for JSON API responses too
-5. **Maintainable**: Easy to modify data structure without touching templates
-
-### Testing Example
-
-```python
-def test_get_homework_list_data_student(self):
-    """Test homework list data generation for students."""
-    view = HomeworkListView()
-    user = self.create_student_user()
-    
-    # Test the data generation method directly
-    data = view._get_homework_list_data(user)
-    
-    # Assertions on typed data
-    self.assertEqual(data.user_type, 'student')
-    self.assertEqual(len(data.homeworks), 1)
-    self.assertIsNotNone(data.homeworks[0].progress)
-    self.assertEqual(data.homeworks[0].progress[0].status, 'not_started')
-```
-
-### Template Usage
+### Example Template with Typed Data
 
 ```html
 <!-- Template receives typed data -->
@@ -1271,6 +1860,14 @@ def test_get_homework_list_data_student(self):
 {% endfor %}
 ```
 
+### Benefits for Templates
+
+1. **Predictable Structure**: Templates can rely on consistent, well-defined data structures
+2. **Type Safety**: Data contracts ensure required fields are always available
+3. **Cleaner Logic**: Templates focus on display, not data manipulation
+4. **Easier Testing**: Template rendering can be tested with mock typed data
+5. **Better Developer Experience**: Clear separation between data preparation and presentation
+
 ## Future Enhancements
 
 ### 1. Phase 2 Features
@@ -1285,46 +1882,56 @@ def test_get_homework_list_data_student(self):
 - **Integration APIs**: RESTful APIs for third-party integrations
 - **Advanced Reporting**: Detailed analytics and export capabilities
 
-## Key Benefits of the Simplified Model
+## Key Benefits of the New Architecture
 
-### 1. **Cleaner Data Relationships**
+### 1. **Testable-First Approach**
+- **Typed Data Contracts**: Clear dataclasses for all data passing between layers
+- **Isolated Logic**: Service and view methods can be tested independently
+- **Error Handling**: Comprehensive error handling with typed error responses
+- **Predictable Interfaces**: Well-defined input and output contracts
+- **Traceable Data Flow**: Clear paths for data through the system layers
+
+### 2. **Cleaner Data Relationships**
 - **No Nullable Foreign Keys**: Every relationship is clear and unambiguous
 - **Hierarchical Structure**: Homework → Section → Conversation → Submission flow is intuitive
 - **Eliminated Redundancy**: Removed unnecessary fields and complex soft delete logic
 - **Unified User Model**: Single user field in conversations, type determined by user profile
 - **No Circular Dependencies**: Clean separation between homework structure and conversation/submission data
 
-### 2. **Teacher Testing Capabilities**
+### 3. **Teacher Testing Capabilities**
 - **Test Conversations**: Teachers can create test conversations to verify AI tutor quality
 - **Separate Tracking**: Test conversations are clearly distinguished from student conversations
 - **Easy Cleanup**: Teachers can delete test conversations when no longer needed
 - **Quality Assurance**: Ensures homework assignments provide good AI guidance before students use them
 
-### 3. **Simplified Business Logic**
+### 4. **Simplified Business Logic**
 - **Clear Ownership**: Each conversation belongs to exactly one student and one section
 - **Straightforward Submissions**: Submission simply tracks which conversation represents the final work
 - **Easier Queries**: No need to check multiple fields or handle nullable relationships
 - **Logical Grouping**: Submissions are naturally grouped with conversations since they represent conversation state
+- **Pure Functions**: Service methods with clear inputs and outputs, minimal side effects
 
-### 4. **Better Performance**
+### 5. **Better Performance**
 - **Optimized Queries**: Simpler relationships mean faster database operations
 - **Reduced Complexity**: Fewer edge cases and validation rules to process
 - **Cleaner Caching**: Simpler data structures are easier to cache effectively
+- **Targeted Data Loading**: Load only the data needed for each view with typed data structures
 
-### 5. **Improved Maintainability**
+### 6. **Improved Maintainability**
 - **Less Code**: Fewer fields and methods to maintain
-- **Clearer Intent**: Each model has a single, well-defined purpose
-- **Easier Testing**: Simpler models are easier to test and debug
-- **Better Separation of Concerns**: Homework structure vs. conversation data are clearly separated
+- **Clearer Intent**: Each model, service, and view has a single, well-defined purpose
+- **Easier Testing**: Typed data contracts and pure functions are easier to test and debug
+- **Better Separation of Concerns**: Clear boundaries between data, business logic, and presentation
 
 ## Conclusion
 
 LLTeacher v2 addresses the critical architectural flaws of v1 while maintaining the innovative core concept. The new design provides:
 
-1. **Clean Data Model**: Simplified relationships with proper constraints
-2. **Service Layer Architecture**: Business logic separated from presentation
-3. **Improved Performance**: Optimized queries and caching strategy
-4. **Better User Experience**: Streamlined workflows and progress tracking
-5. **Maintainable Codebase**: Clear separation of concerns and proper testing
+1. **Testable-First Architecture**: Typed data contracts and pure methods for reliable testing
+2. **Clean Data Model**: Simplified relationships with proper constraints
+3. **Service Layer Architecture**: Business logic separated from presentation
+4. **Improved Performance**: Optimized queries and caching strategy
+5. **Better User Experience**: Streamlined workflows and progress tracking
+6. **Maintainable Codebase**: Clear separation of concerns and comprehensive type safety
 
-The system is designed to be scalable, maintainable, and user-friendly while preserving the revolutionary AI-guided learning approach that makes LLTeacher unique.
+The system is designed to be testable, scalable, maintainable, and user-friendly while preserving the revolutionary AI-guided learning approach that makes LLTeacher unique.
