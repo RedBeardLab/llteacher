@@ -12,17 +12,15 @@ from datetime import timedelta
 from unittest.mock import patch, MagicMock
 import uuid
 
-from homeworks.models import Homework, Section, SectionSolution
+from homeworks.models import Homework, Section
 from homeworks.services import (
     HomeworkService, 
     HomeworkCreateData, 
     SectionCreateData, 
     HomeworkCreateResult,
     HomeworkProgressData,
-    SectionProgressData,
     HomeworkDetailData,
-    HomeworkUpdateData,
-    HomeworkUpdateResult
+    HomeworkUpdateData
 )
 from accounts.models import Teacher, Student
 

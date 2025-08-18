@@ -5,7 +5,7 @@ This module provides services for managing conversations between users and AI tu
 Following a testable-first approach with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
 from django.db import transaction
@@ -172,7 +172,7 @@ class ConversationService:
         Returns:
             ConversationData if found, None otherwise
         """
-        from .models import Conversation, Message
+        from .models import Conversation
         
         try:
             # Get conversation with optimized query
@@ -516,8 +516,6 @@ class SubmissionService:
         """
         from django.utils import timezone
         from homeworks.models import Section
-        from accounts.models import Student
-        from .models import Conversation
         
         # Initialize results dictionary
         results = {

@@ -5,7 +5,7 @@ This module provides services for configuring and interacting with language mode
 Following a testable-first approach with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 from uuid import UUID
 import logging
 

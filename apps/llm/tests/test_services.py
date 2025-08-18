@@ -13,8 +13,7 @@ import uuid
 from llm.models import LLMConfig
 from llm.services import (
     LLMService, 
-    LLMConfigData,
-    LLMResponseResult
+    LLMConfigData
 )
 
 User = get_user_model()

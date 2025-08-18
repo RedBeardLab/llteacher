@@ -9,12 +9,10 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
-from unittest.mock import patch, MagicMock
-import uuid
+from unittest.mock import patch
 
-from conversations.models import Conversation, Message, Submission
+from conversations.models import Conversation, Submission
 from conversations.services import (
-    ConversationService,
     SubmissionService
 )
 from homeworks.models import Homework, Section

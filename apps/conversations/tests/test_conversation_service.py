@@ -12,14 +12,12 @@ from datetime import timedelta
 from unittest.mock import patch, MagicMock
 import uuid
 
-from conversations.models import Conversation, Message, Submission
+from conversations.models import Conversation, Message
 from conversations.services import (
     ConversationService,
     ConversationData,
-    MessageData,
     ConversationStartResult,
-    MessageSendResult,
-    CodeExecutionResult
+    MessageSendResult
 )
 from homeworks.models import Homework, Section
 from accounts.models import Teacher, Student
