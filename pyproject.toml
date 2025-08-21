@@ -17,7 +17,6 @@ dependencies = [
     "homeworks",
     "llm",
     "core",
-    "permissions",
     "services",
 ]
 
@@ -32,7 +31,6 @@ members = [
     "apps/homeworks",
     "apps/llm",
     "core",
-    "permissions",
     "services"
 ]
 
@@ -42,7 +40,6 @@ conversations = { workspace = true }
 homeworks = { workspace = true }
 llm = { workspace = true }
 core = { workspace = true }
-permissions = { workspace = true }
 services = { workspace = true }
 
 [tool.uv]

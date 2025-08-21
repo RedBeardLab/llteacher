@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Homeworks{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Homeworks</h1>
+        </div>
+        {% if data.user_type == 'teacher' %}
+        <div class="col-auto">
+            <a href="{% url 'homeworks:create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Create New Homework
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if data.total_count == 0 %}
+    <div class="alert alert-info">
+        {% if data.user_type == 'teacher' %}
+            You haven't created any homeworks yet. Click the "Create New Homework" button to get started.
+        {% elif data.user_type == 'student' %}
+            No homeworks have been assigned to you yet.
+        {% else %}
+            No homeworks are available.
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="row row-cols-1 row-cols-md-2 g-4">
+        {% for homework in data.homeworks %}
+        <div class="col">
+            <div class="card h-100 {% if homework.is_overdue %}border-danger{% endif %}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">{{ homework.title }}</h5>
+                    {% if homework.is_overdue %}
+                    <span class="badge bg-danger">Overdue</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ homework.description }}</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">{{ homework.section_count }} Sections</small>
+                        <small class="text-muted">Due: {{ homework.due_date|date:"M d, Y" }}</small>
+                    </div>
+                    
+                    {% if homework.progress %}
+                    <div class="mt-3">
+                        <h6>Progress:</h6>
+                        <div class="progress" style="height: 25px;">
+                            {% with completed_count=0 %}
+                                {% for section in homework.progress %}
+                                    {% if section.status == 'submitted' %}
+                                        {% with completed_count=completed_count|add:1 %}{% endwith %}
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% with total_count=homework.progress|length %}
+                                    {% if total_count > 0 %}
+                                        {% with percentage=completed_count|floatformat:0|default:0 %}
+                                        <div class="progress-bar" role="progressbar" style="width: {{ percentage }}%;" 
+                                             aria-valuenow="{{ percentage }}" aria-valuemin="0" aria-valuemax="100">
+                                            {{ percentage }}%
+                                        </div>
+                                        {% endwith %}
+                                    {% else %}
+                                        <div class="progress-bar" role="progressbar" style="width: 0%;" 
+                                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                            0%
+                                        </div>
+                                    {% endif %}
+                                {% endwith %}
+                            {% endwith %}
+                        </div>
+                        <div class="mt-2">
+                            {% for section in homework.progress %}
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <div>Section {{ section.order }}: {{ section.title }}</div>
+                                <div>
+                                    {% if section.status == 'submitted' %}
+                                    <span class="badge bg-success">Submitted</span>
+                                    {% elif section.status == 'in_progress' %}
+                                    <span class="badge bg-warning">In Progress</span>
+                                    {% elif section.status == 'overdue' %}
+                                    <span class="badge bg-danger">Overdue</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Not Started</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'homeworks:detail' homework.id %}" class="btn btn-primary">
+                        {% if data.user_type == 'teacher' %}View & Edit{% else %}Start Working{% endif %}
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

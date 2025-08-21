@@ -10,7 +10,6 @@ members = [
     "homeworks",
     "llm",
     "llteacher",
-    "permissions",
     "services",
 ]
 
@@ -276,7 +275,6 @@ dependencies = [
     { name = "django" },
     { name = "homeworks" },
     { name = "llm" },
-    { name = "permissions" },
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "services" },
@@ -300,7 +298,6 @@ requires-dist = [
     { name = "django", specifier = ">=5.2.4" },
     { name = "homeworks", editable = "apps/homeworks" },
     { name = "llm", editable = "apps/llm" },
-    { name = "permissions", editable = "permissions" },
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "services", editable = "services" },
@@ -383,17 +380,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/ca/bc/f35b8446f4531a7cb
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl", hash = "sha256:a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08", size = 31191, upload-time = "2023-12-10T22:30:43.14Z" },
 ]
-
-[[package]]
-name = "permissions"
-version = "1.0.0"
-source = { editable = "permissions" }
-dependencies = [
-    { name = "django" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "django", specifier = ">=5.2.4" }]
 
 [[package]]
 name = "platformdirs"
