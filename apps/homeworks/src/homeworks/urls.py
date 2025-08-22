@@ -9,7 +9,6 @@ app_name = 'homeworks'
 
 urlpatterns = [
     path('', views.HomeworkListView.as_view(), name='list'),
-    # These URLs will be implemented as we create the respective views
-    path('create/', views.HomeworkListView.as_view(), name='create'),  # Placeholder
-    path('<uuid:homework_id>/', views.HomeworkListView.as_view(), name='detail'),  # Placeholder
+    path('create/', views.HomeworkCreateView.as_view(), name='create'),
+    path('<uuid:homework_id>/', views.HomeworkDetailView.as_view(), name='detail'),
 ]

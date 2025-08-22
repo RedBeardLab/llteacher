@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if data.action == 'create' %}Create New Homework{% else %}Edit Homework{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .section-form {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    border: 1px solid #dee2e6;
+  }
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .delete-section {
+    cursor: pointer;
+    color: #dc3545;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="row mb-4">
+    <div class="col">
+      <h1>
+        {% if data.action == 'create' %}Create New Homework{% else %}Edit Homework{% endif %}
+      </h1>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'homeworks:list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to List
+      </a>
+    </div>
+  </div>
+
+  {% if data.errors %}
+  <div class="alert alert-danger">
+    <strong>There were errors with your submission:</strong>
+    <ul>
+      {% for field, errors in data.errors.homework.items %}
+      <li>{{ field }}: {{ errors|join:", " }}</li>
+      {% endfor %}
+
+      {% if data.errors.formset %}
+      {% for error in data.errors.formset %}
+      <li>{{ error }}</li>
+      {% endfor %}
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form method="post" id="homework-form">
+    {% csrf_token %}
+    
+    <!-- Homework Basic Info -->
+    <div class="card mb-4">
+      <div class="card-header bg-light">
+        <h5 class="mb-0">Homework Details</h5>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label for="{{ data.form.title.id_for_label }}" class="form-label">Title</label>
+          {{ data.form.title }}
+          {% if data.form.title.errors %}
+          <div class="invalid-feedback d-block">
+            {{ data.form.title.errors|join:", " }}
+          </div>
+          {% endif %}
+        </div>
+        
+        <div class="mb-3">
+          <label for="{{ data.form.description.id_for_label }}" class="form-label">Description</label>
+          {{ data.form.description }}
+          {% if data.form.description.errors %}
+          <div class="invalid-feedback d-block">
+            {{ data.form.description.errors|join:", " }}
+          </div>
+          {% endif %}
+        </div>
+        
+        <div class="mb-3">
+          <label for="{{ data.form.due_date.id_for_label }}" class="form-label">Due Date</label>
+          {{ data.form.due_date }}
+          {% if data.form.due_date.errors %}
+          <div class="invalid-feedback d-block">
+            {{ data.form.due_date.errors|join:", " }}
+          </div>
+          {% endif %}
+        </div>
+        
+        <div class="mb-3">
+          <label for="{{ data.form.llm_config.id_for_label }}" class="form-label">LLM Configuration</label>
+          {{ data.form.llm_config }}
+          <div class="form-text">Select a configuration for the LLM assistant (optional)</div>
+          {% if data.form.llm_config.errors %}
+          <div class="invalid-feedback d-block">
+            {{ data.form.llm_config.errors|join:", " }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    
+    <!-- Sections -->
+    <h2>Sections</h2>
+    <div class="alert alert-info">
+      <p><i class="bi bi-info-circle"></i> Add at least one section to your homework. Sections are ordered numerically starting from 1.</p>
+    </div>
+    
+    {{ data.section_forms.management_form }}
+    
+    <div id="section-container">
+      {% for section_form in data.section_forms %}
+      <div class="section-form">
+        <div class="section-header">
+          <h5>Section {{ forloop.counter }}</h5>
+          {% if forloop.counter > 1 %}
+          <a class="delete-section" onclick="deleteSection(this)">
+            <i class="bi bi-trash"></i> Remove
+          </a>
+          {% endif %}
+        </div>
+        
+        {{ section_form.id }}
+        
+        <div class="mb-3">
+          <label for="{{ section_form.prefix }}-title" class="form-label">Section Title</label>
+          {{ section_form.title }}
+          {% if section_form.title.errors %}
+          <div class="invalid-feedback d-block">
+            {{ section_form.title.errors|join:", " }}
+          </div>
+          {% endif %}
+        </div>
+        
+        <div class="mb-3">
+          <label for="{{ section_form.prefix }}-content" class="form-label">Section Content</label>
+          {{ section_form.content }}
+          {% if section_form.content.errors %}
+          <div class="invalid-feedback d-block">
+            {{ section_form.content.errors|join:", " }}
+          </div>
+          {% endif %}
+        </div>
+        
+        <div class="row mb-3">
+          <div class="col-md-2">
+            <label for="{{ section_form.prefix }}-order" class="form-label">Order</label>
+            {{ section_form.order }}
+            {% if section_form.order.errors %}
+            <div class="invalid-feedback d-block">
+              {{ section_form.order.errors|join:", " }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        
+        <div class="mb-3">
+          <label for="{{ section_form.prefix }}-solution" class="form-label">Solution (Optional)</label>
+          {{ section_form.solution }}
+          <div class="form-text">Add an optional solution that can be viewed by teachers only</div>
+          {% if section_form.solution.errors %}
+          <div class="invalid-feedback d-block">
+            {{ section_form.solution.errors|join:", " }}
+          </div>
+          {% endif %}
+        </div>
+        
+        {% if not forloop.first %}
+        <div class="mb-3">
+          {{ section_form.DELETE }}
+          <label for="{{ section_form.DELETE.id_for_label }}" class="form-check-label">Delete this section</label>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    
+    <div class="mb-4">
+      <button type="button" class="btn btn-outline-primary" id="add-section">
+        <i class="bi bi-plus-circle"></i> Add Another Section
+      </button>
+    </div>
+    
+    <!-- Submit Button -->
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+      <button type="submit" class="btn btn-primary">
+        {% if data.action == 'create' %}Create Homework{% else %}Save Changes{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Get the total forms field to track the number of forms
+    const totalFormsField = document.getElementById('id_sections-TOTAL_FORMS');
+    const sectionContainer = document.getElementById('section-container');
+    const addSectionBtn = document.getElementById('add-section');
+    
+    // Add section button click handler
+    addSectionBtn.addEventListener('click', function() {
+      const formCount = parseInt(totalFormsField.value);
+      
+      // Clone the first form as a template
+      const formTemplate = sectionContainer.querySelector('.section-form').cloneNode(true);
+      
+      // Update form index
+      const newIndex = formCount;
+      updateFormIndex(formTemplate, 0, newIndex);
+      
+      // Add a remove button
+      const header = formTemplate.querySelector('.section-header');
+      header.innerHTML = `<h5>Section ${formCount + 1}</h5><a class="delete-section" onclick="deleteSection(this)"><i class="bi bi-trash"></i> Remove</a>`;
+      
+      // Clear input values
+      const inputs = formTemplate.querySelectorAll('input, textarea');
+      inputs.forEach(input => {
+        if (input.type !== 'hidden' || input.name.includes('id')) {
+          input.value = '';
+        }
+      });
+      
+      // Set default order value for new section
+      const orderInput = formTemplate.querySelector('input[name$="-order"]');
+      if (orderInput) {
+        orderInput.value = formCount + 1;
+      }
+      
+      // Add the new form to the container
+      sectionContainer.appendChild(formTemplate);
+      
+      // Update total form count
+      totalFormsField.value = formCount + 1;
+    });
+  });
+  
+  // Function to update form indices
+  function updateFormIndex(form, oldIndex, newIndex) {
+    const elements = form.querySelectorAll('input, textarea, select, label');
+    
+    elements.forEach(element => {
+      if (element.name) {
+        element.name = element.name.replace(`sections-${oldIndex}`, `sections-${newIndex}`);
+      }
+      if (element.id) {
+        element.id = element.id.replace(`sections-${oldIndex}`, `sections-${newIndex}`);
+      }
+      if (element.htmlFor) {
+        element.htmlFor = element.htmlFor.replace(`sections-${oldIndex}`, `sections-${newIndex}`);
+      }
+    });
+  }
+  
+  // Function to delete a section
+  function deleteSection(button) {
+    const section = button.closest('.section-form');
+    const deleteInput = section.querySelector('input[type=checkbox][name$="-DELETE"]');
+    
+    if (deleteInput) {
+      // If there's a DELETE checkbox (for existing sections), check it
+      deleteInput.checked = true;
+      section.style.display = 'none';
+    } else {
+      // For new sections, remove the DOM element entirely
+      const totalFormsField = document.getElementById('id_sections-TOTAL_FORMS');
+      const sectionContainer = document.getElementById('section-container');
+      const forms = sectionContainer.querySelectorAll('.section-form');
+      
+      // Get the index of the form to remove
+      const formIndex = Array.from(forms).indexOf(section);
+      
+      // Remove the form
+      section.remove();
+      
+      // Update indices for all following forms
+      for (let i = formIndex + 1; i < forms.length; i++) {
+        updateFormIndex(forms[i], i, i - 1);
+      }
+      
+      // Update total form count
+      totalFormsField.value = parseInt(totalFormsField.value) - 1;
+    }
+  }
+</script>
+{% endblock %}
