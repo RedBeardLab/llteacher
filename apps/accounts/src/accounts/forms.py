@@ -93,3 +93,37 @@ class LoginForm(AuthenticationForm):
             'invalid_login': "Please enter a correct username and password. Note that both fields may be case-sensitive.",
             'inactive': "This account is inactive.",
         })
+
+
+class ProfileForm(forms.ModelForm):
+    """Form for editing user profile."""
+    
+    first_name = forms.CharField(max_length=30, widget=forms.TextInput(attrs={
+        'class': 'form-control',
+        'placeholder': 'First Name'
+    }))
+    
+    last_name = forms.CharField(max_length=30, widget=forms.TextInput(attrs={
+        'class': 'form-control',
+        'placeholder': 'Last Name'
+    }))
+    
+    email = forms.EmailField(widget=forms.EmailInput(attrs={
+        'class': 'form-control',
+        'placeholder': 'Email'
+    }))
+    
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'email']
+    
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        super(ProfileForm, self).__init__(*args, **kwargs)
+    
+    def clean_email(self):
+        """Validate that the email is unique."""
+        email = self.cleaned_data.get('email')
+        if email and User.objects.filter(email=email).exclude(pk=self.instance.pk).exists():
+            raise ValidationError('A user with that email already exists.')
+        return email

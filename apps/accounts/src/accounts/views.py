@@ -15,8 +15,11 @@ from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
 from django.db import transaction
 from django.urls import reverse
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+from datetime import datetime
 
-from .forms import RegistrationForm, LoginForm
+from .forms import RegistrationForm, LoginForm, ProfileForm
 from .models import Teacher, Student, User
 
 
@@ -54,6 +57,25 @@ class LoginResult:
     success: bool
     redirect_url: str
     error: Optional[str] = None
+
+
+@dataclass
+class ProfileData:
+    """Data structure for the profile management view."""
+    user_id: UUID
+    username: str
+    email: str
+    first_name: str
+    last_name: str
+    role: str  # 'teacher' or 'student'
+    joined_date: datetime
+    
+    # Teacher-specific fields
+    courses_created: int = 0
+    
+    # Student-specific fields
+    submissions_count: int = 0
+    completed_sections: int = 0
 
 
 class UserRegistrationView(View):
@@ -219,3 +241,131 @@ def logout_view(request):
     logout(request)
     messages.info(request, "You have been logged out.")
     return redirect('/')
+
+
+class ProfileManagementView(View):
+    """View for viewing and editing user profiles."""
+    
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        """Ensure user is logged in before accessing view."""
+        return super().dispatch(*args, **kwargs)
+    
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Handle GET requests to display the profile form."""
+        # Get user profile data
+        profile_data = self._get_profile_data(request.user)
+        
+        # Create profile form with user instance
+        form = ProfileForm(instance=request.user)
+        
+        # Render the form
+        return render(request, 'accounts/profile.html', {
+            'form': form,
+            'profile_data': profile_data
+        })
+    
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Handle POST requests to process profile form submission."""
+        # Create form with POST data and user instance
+        form = ProfileForm(request.POST, instance=request.user)
+        
+        if form.is_valid():
+            # Save the form
+            form.save()
+            messages.success(request, "Your profile has been updated.")
+            return redirect('accounts:profile')
+        
+        # Get user profile data
+        profile_data = self._get_profile_data(request.user)
+        
+        # Render the form with errors
+        return render(request, 'accounts/profile.html', {
+            'form': form,
+            'profile_data': profile_data
+        })
+    
+    def _get_profile_data(self, user) -> ProfileData:
+        """
+        Get profile data for the user.
+        
+        Args:
+            user: The current user
+            
+        Returns:
+            ProfileData with user profile information
+        """
+        # Determine user role
+        teacher_profile = getattr(user, 'teacher_profile', None)
+        student_profile = getattr(user, 'student_profile', None)
+        
+        # Set role and role-specific data
+        if teacher_profile:
+            role = 'teacher'
+            courses_created = self._get_courses_count(teacher_profile)
+            submissions_count = 0
+            completed_sections = 0
+        elif student_profile:
+            role = 'student'
+            courses_created = 0
+            submissions_count = self._get_submissions_count(student_profile)
+            completed_sections = self._get_completed_sections_count(student_profile)
+        else:
+            role = 'unknown'
+            courses_created = 0
+            submissions_count = 0
+            completed_sections = 0
+        
+        # Create and return profile data
+        return ProfileData(
+            user_id=user.id,
+            username=user.username,
+            email=user.email,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            role=role,
+            joined_date=user.date_joined,
+            courses_created=courses_created,
+            submissions_count=submissions_count,
+            completed_sections=completed_sections
+        )
+    
+    def _get_courses_count(self, teacher_profile) -> int:
+        """
+        Get the number of courses (homeworks) created by a teacher.
+        
+        Args:
+            teacher_profile: Teacher profile object
+            
+        Returns:
+            Integer count of courses created
+        """
+        return teacher_profile.homeworks_created.count()
+    
+    def _get_submissions_count(self, student_profile) -> int:
+        """
+        Get the number of submissions made by a student.
+        
+        Args:
+            student_profile: Student profile object
+            
+        Returns:
+            Integer count of submissions made
+        """
+        # In a real implementation, we would query the submissions table
+        # Since we don't have direct access to it in the accounts app, we'll use 0 as a placeholder
+        return 0
+    
+    def _get_completed_sections_count(self, student_profile) -> int:
+        """
+        Get the number of sections completed by a student.
+        
+        Args:
+            student_profile: Student profile object
+            
+        Returns:
+            Integer count of completed sections
+        """
+        # In a real implementation, we would query the submissions table
+        # Since we don't have direct access to it in the accounts app, we'll use 0 as a placeholder
+        return 0

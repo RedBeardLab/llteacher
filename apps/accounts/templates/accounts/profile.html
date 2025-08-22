@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}User Profile{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">User Profile</h2>
+                </div>
+                <div class="card-body">
+                    <!-- Profile Information -->
+                    <div class="mb-4">
+                        <h3>{{ profile_data.first_name }} {{ profile_data.last_name }}</h3>
+                        <p class="text-muted">@{{ profile_data.username }} - {{ profile_data.role|title }}</p>
+                        <p>Member since: {{ profile_data.joined_date|date:"F j, Y" }}</p>
+                    </div>
+
+                    <!-- Statistics -->
+                    <div class="mb-4">
+                        <h4>Statistics</h4>
+                        <div class="row">
+                            {% if profile_data.role == 'teacher' %}
+                            <div class="col-md-6">
+                                <div class="card bg-light mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Courses Created</h5>
+                                        <p class="card-text display-4">{{ profile_data.courses_created }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if profile_data.role == 'student' %}
+                            <div class="col-md-6">
+                                <div class="card bg-light mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Submissions</h5>
+                                        <p class="card-text display-4">{{ profile_data.submissions_count }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Completed Sections</h5>
+                                        <p class="card-text display-4">{{ profile_data.completed_sections }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Edit Profile Form -->
+                    <div class="mt-4">
+                        <h4>Edit Profile</h4>
+                        <form method="post" action="{% url 'accounts:profile' %}">
+                            {% csrf_token %}
+                            
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                <p>{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            <div class="form-group mb-3">
+                                <label for="{{ form.first_name.id_for_label }}">First Name</label>
+                                {{ form.first_name }}
+                                {% if form.first_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.first_name.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="{{ form.last_name.id_for_label }}">Last Name</label>
+                                {{ form.last_name }}
+                                {% if form.last_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.last_name.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="{{ form.email.id_for_label }}">Email</label>
+                                {{ form.email }}
+                                {% if form.email.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.email.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group mt-4">
+                                <button type="submit" class="btn btn-primary">Update Profile</button>
+                                <a href="{% url 'homeworks:list' %}" class="btn btn-secondary">Cancel</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
