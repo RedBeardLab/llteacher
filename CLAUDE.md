@@ -13,12 +13,12 @@ This document contains key information about the LLTeacher v2 project to help wi
 Use the optimized test runner with uv:
 
 ```bash
-uv run python run_tests.py <app_path>.<test_module>
+uv run python run_tests.py --settings=src.llteacher.test_settings <app_path>.<test_module>
 ```
 
 Example:
 ```bash
-uv run python run_tests.py apps.homeworks.tests.test_section_detail_view
+uv run python run_tests.py --settings=src.llteacher.test_settings apps.homeworks.tests.test_section_detail_view
 ```
 
 The test runner uses the test settings module located at `src.llteacher.test_settings` which provides optimized test settings including an in-memory database for faster tests.
