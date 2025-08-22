@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Submit Section - {{ view_data.section_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">Submit Section: {{ view_data.section_title }}</h2>
+                </div>
+                <div class="card-body">
+                    {% if view_data.existing_submission %}
+                    <div class="alert alert-warning">
+                        <h5><i class="fas fa-exclamation-triangle"></i> You already have a submission for this section</h5>
+                        <p>
+                            You submitted this section on 
+                            <strong>{{ view_data.existing_submission.submitted_at|date:"F j, Y, g:i a" }}</strong>. 
+                            Submitting again will replace your previous submission.
+                        </p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if form_data and form_data.errors %}
+                    <div class="alert alert-danger">
+                        <h5>Please correct the following errors:</h5>
+                        <ul>
+                            {% for field, error in form_data.errors.items %}
+                            <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    {% if view_data.conversations %}
+                        <form method="post" action="{% url 'conversations:submit_section' section_id=view_data.section_id %}">
+                            {% csrf_token %}
+                            
+                            <div class="form-group mb-4">
+                                <label for="conversation_id" class="form-label">Choose a conversation to submit:</label>
+                                <select class="form-select" id="conversation_id" name="conversation_id" required>
+                                    <option value="">-- Select a conversation --</option>
+                                    {% for conversation in view_data.conversations %}
+                                    <option value="{{ conversation.id }}" 
+                                        {% if view_data.existing_submission and view_data.existing_submission.conversation_id == conversation.id %}selected{% endif %}>
+                                        Conversation from {{ conversation.created_at|date:"M d, Y, H:i" }} 
+                                        ({{ conversation.message_count }} message{{ conversation.message_count|pluralize }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    Choose the conversation that best demonstrates your understanding of the section.
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <h5><i class="fas fa-info-circle"></i> What happens when you submit?</h5>
+                                <p>
+                                    When you submit a section, the selected conversation will be used to represent your work 
+                                    for this section. Your teacher will be able to view the full conversation history to 
+                                    evaluate your understanding.
+                                </p>
+                                
+                                <p class="mb-0">
+                                    <strong>Note:</strong> You can update your submission at any time before the due date 
+                                    by selecting a different conversation and submitting again.
+                                </p>
+                            </div>
+                            
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                                <a href="#" class="btn btn-secondary me-md-2">
+                                    Cancel
+                                </a>
+                                <button type="submit" class="btn btn-success">
+                                    {% if view_data.existing_submission %}Update Submission{% else %}Submit Section{% endif %}
+                                </button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <h5>No conversations available</h5>
+                            <p>
+                                You don't have any conversations for this section yet. 
+                                You need to start a conversation and interact with the AI tutor before you can submit.
+                            </p>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                            <a href="{% url 'conversations:start' section_id=view_data.section_id %}" class="btn btn-primary">
+                                <i class="fas fa-comment-dots"></i> Start a Conversation
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

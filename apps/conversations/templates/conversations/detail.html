@@ -22,8 +22,8 @@
             <div class="card shadow">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h2 class="mb-0">Conversation for {{ conversation_data.section_title }}</h2>
-                    {% if not conversation_data.is_teacher_test and conversation_data.can_submit %}
-                    <a href="#" class="btn btn-success">Submit this conversation</a>
+                    {% if not conversation_data.is_teacher_test and conversation_data.can_submit and user.id == conversation_data.user_id %}
+                    <a href="{% url 'conversations:submit_section' section_id=conversation_data.section_id %}" class="btn btn-success">Submit this section</a>
                     {% endif %}
                 </div>
                 <div class="card-body">
