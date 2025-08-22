@@ -5,8 +5,8 @@ This module provides forms for user registration and authentication,
 following the testable-first architecture.
 """
 from django import forms
-from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth import get_user_model, authenticate
+from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.core.exceptions import ValidationError
 
 User = get_user_model()
@@ -72,3 +72,24 @@ class RegistrationForm(UserCreationForm):
         if User.objects.filter(email=email).exists():
             raise ValidationError('A user with that email already exists.')
         return email
+
+
+class LoginForm(AuthenticationForm):
+    """Form for user login."""
+    
+    username = forms.CharField(widget=forms.TextInput(attrs={
+        'class': 'form-control',
+        'placeholder': 'Username'
+    }))
+    
+    password = forms.CharField(widget=forms.PasswordInput(attrs={
+        'class': 'form-control',
+        'placeholder': 'Password'
+    }))
+    
+    def __init__(self, *args, **kwargs):
+        super(LoginForm, self).__init__(*args, **kwargs)
+        self.error_messages.update({
+            'invalid_login': "Please enter a correct username and password. Note that both fields may be case-sensitive.",
+            'inactive': "This account is inactive.",
+        })
