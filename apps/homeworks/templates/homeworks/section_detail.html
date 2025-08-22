@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Section {{ data.section_order }}: {{ data.section_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Breadcrumb Navigation -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'homeworks:list' %}">Homeworks</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'homeworks:detail' data.homework_id %}">{{ data.homework_title }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Section {{ data.section_order }}: {{ data.section_title }}</li>
+        </ol>
+    </nav>
+
+    <!-- Section Header -->
+    <div class="card mb-4">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">Section {{ data.section_order }}: {{ data.section_title }}</h3>
+        </div>
+        <div class="card-body">
+            <div class="content-area mb-4">
+                {{ data.section_content|linebreaks }}
+            </div>
+
+            {% if data.is_teacher and data.has_solution %}
+            <div class="alert alert-info">
+                <h5><i class="bi bi-lightbulb"></i> Solution</h5>
+                <div class="solution-content">
+                    {{ data.solution_content|linebreaks }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Conversations Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">Conversations</h4>
+            {% if data.is_student or data.is_teacher %}
+            <a href="#" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> New Conversation
+            </a>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if data.conversations %}
+            <div class="list-group">
+                {% for conversation in data.conversations %}
+                <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1">{{ conversation.label }}</h5>
+                        <small class="text-muted">Last updated: {{ conversation.updated_at|date:"F d, Y H:i" }}</small>
+                    </div>
+                    <span class="badge bg-primary rounded-pill">{{ conversation.message_count }} messages</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="bi bi-chat-dots fs-1 text-muted"></i>
+                <p class="mt-2">No conversations started yet.</p>
+                {% if data.is_student or data.is_teacher %}
+                <a href="#" class="btn btn-outline-primary">
+                    Start a New Conversation
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Submission Section (for students) -->
+    {% if data.is_student %}
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h4 class="mb-0">Submission Status</h4>
+        </div>
+        <div class="card-body">
+            {% if data.submission %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle-fill"></i>
+                <strong>Submitted!</strong> You submitted this section on {{ data.submission.submitted_at|date:"F d, Y H:i" }}
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>Not submitted yet.</strong> Once you're done working on this section, please submit your work.
+            </div>
+            <div class="text-center mt-3">
+                <button class="btn btn-success" disabled>
+                    <i class="bi bi-check2-circle"></i> Submit Section
+                </button>
+                <small class="d-block text-muted mt-2">You need an active conversation to submit</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Action Buttons -->
+    <div class="d-flex justify-content-between">
+        <a href="{% url 'homeworks:detail' data.homework_id %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Homework
+        </a>
+    </div>
+</div>
+{% endblock %}

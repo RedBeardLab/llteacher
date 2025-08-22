@@ -10,7 +10,7 @@ from uuid import UUID
 from django.forms import formset_factory
 
 from django.views import View
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
@@ -18,7 +18,7 @@ from django.db.models import Q, Count, Prefetch
 from django.utils import timezone
 from django.contrib import messages
 
-from llteacher.permissions.decorators import teacher_required, student_required
+from llteacher.permissions.decorators import teacher_required, student_required, section_access_required
 
 from .models import Homework, Section, SectionSolution
 from .services import HomeworkService, HomeworkCreateData, SectionCreateData
@@ -407,4 +407,176 @@ class HomeworkDetailView(View):
             user_type=user_type,
             can_edit=can_edit,
             llm_config={"id": homework_detail.llm_config} if homework_detail.llm_config else None
+        )
+
+
+@dataclass
+class SectionDetailViewData:
+    """Data structure for the section detail view."""
+    homework_id: UUID
+    homework_title: str
+    section_id: UUID
+    section_title: str
+    section_content: str
+    section_order: int
+    has_solution: bool
+    solution_content: Optional[str]
+    conversations: Optional[List[Dict[str, Any]]] = None
+    submission: Optional[Dict[str, Any]] = None
+    is_teacher: bool = False
+    is_student: bool = False
+
+
+class SectionDetailView(View):
+    """
+    View for displaying individual sections with their conversations.
+    
+    For teachers: Shows the section with solution and test conversations
+    For students: Shows the section with their conversations and submission
+    """
+    
+    @method_decorator(login_required, name='dispatch')
+    def dispatch(self, *args, **kwargs):
+        """Ensure user is logged in before accessing view."""
+        return super().dispatch(*args, **kwargs)
+    
+    def get(self, request: HttpRequest, homework_id: UUID, section_id: UUID) -> HttpResponse:
+        """Handle GET requests to display section detail."""
+        # Get the homework and section
+        try:
+            homework = Homework.objects.get(id=homework_id)
+            section = Section.objects.get(id=section_id, homework=homework)
+        except (Homework.DoesNotExist, Section.DoesNotExist):
+            return redirect('homeworks:detail', homework_id=homework_id)
+        
+        # Check user access permissions
+        teacher_profile = getattr(request.user, 'teacher_profile', None)
+        student_profile = getattr(request.user, 'student_profile', None)
+        
+        # Teacher must own the homework
+        if teacher_profile and homework.created_by != teacher_profile:
+            return HttpResponseForbidden("Access denied.")
+        
+        # For now, allow all students access to sections
+        # Additional checks can be added here if needed
+        
+        # If user is neither teacher nor student, deny access
+        if not teacher_profile and not student_profile:
+            return HttpResponseForbidden("Access denied.")
+        
+        # Get the appropriate data for the view
+        data = self._get_view_data(request.user, homework_id, section_id)
+        
+        # If there was a problem getting the data, redirect to homework detail
+        if data is None:
+            return redirect('homeworks:detail', homework_id=homework_id)
+        
+        # Render the template with the data
+        return render(request, 'homeworks/section_detail.html', {'data': data})
+    
+    def _get_view_data(self, user, homework_id: UUID, section_id: UUID) -> Optional[SectionDetailViewData]:
+        """
+        Prepare data for the section detail view based on user type.
+        
+        Args:
+            user: The current user
+            homework_id: The UUID of the homework
+            section_id: The UUID of the section to display
+            
+        Returns:
+            SectionDetailViewData with section details and conversations, or None if not found
+        """
+        from conversations.models import Conversation, Submission
+        
+        # Determine user type
+        teacher_profile = getattr(user, 'teacher_profile', None)
+        student_profile = getattr(user, 'student_profile', None)
+        
+        # Get homework and section
+        try:
+            homework = Homework.objects.get(id=homework_id)
+            section = Section.objects.select_related('solution').get(id=section_id, homework=homework)
+        except (Homework.DoesNotExist, Section.DoesNotExist):
+            return None
+        
+        # Initialize variables
+        is_teacher = False
+        is_student = False
+        conversations = None
+        submission = None
+        
+        # Get conversations and submission data based on user type
+        if teacher_profile:
+            is_teacher = True
+            
+            # Get test conversations created by this teacher for this section
+            teacher_conversations = Conversation.objects.filter(
+                user=user,
+                section=section,
+                is_deleted=False
+            ).select_related('user').prefetch_related('messages')
+            
+            # Format conversations data
+            if teacher_conversations.exists():
+                conversations = []
+                for conv in teacher_conversations:
+                    conversations.append({
+                        'id': conv.id,
+                        'created_at': conv.created_at,
+                        'updated_at': conv.updated_at,
+                        'message_count': conv.message_count,
+                        'is_teacher_test': True,
+                        'label': f"Test conversation {conv.created_at.strftime('%Y-%m-%d %H:%M')}"
+                    })
+        
+        elif student_profile:
+            is_student = True
+            
+            # Get conversations created by this student for this section
+            student_conversations = Conversation.objects.filter(
+                user=user,
+                section=section,
+                is_deleted=False
+            ).select_related('user').prefetch_related('messages')
+            
+            # Format conversations data
+            if student_conversations.exists():
+                conversations = []
+                for conv in student_conversations:
+                    conversations.append({
+                        'id': conv.id,
+                        'created_at': conv.created_at,
+                        'updated_at': conv.updated_at,
+                        'message_count': conv.message_count,
+                        'is_teacher_test': False,
+                        'label': f"Conversation {conv.created_at.strftime('%Y-%m-%d %H:%M')}"
+                    })
+                    
+            # Get submission for this student and section if it exists
+            student_submission = Submission.objects.filter(
+                conversation__user=user,
+                conversation__section=section
+            ).select_related('conversation').first()
+            
+            if student_submission:
+                submission = {
+                    'id': student_submission.id,
+                    'conversation_id': student_submission.conversation.id,
+                    'submitted_at': student_submission.submitted_at
+                }
+        
+        # Create and return the view data
+        return SectionDetailViewData(
+            homework_id=homework.id,
+            homework_title=homework.title,
+            section_id=section.id,
+            section_title=section.title,
+            section_content=section.content,
+            section_order=section.order,
+            has_solution=section.solution is not None,
+            solution_content=section.solution.content if section.solution else None,
+            conversations=conversations,
+            submission=submission,
+            is_teacher=is_teacher,
+            is_student=is_student
         )
