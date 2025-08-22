@@ -18,7 +18,7 @@
             
             {% if data.can_edit %}
             <div class="mt-2">
-                <a href="{% url 'homeworks:detail' data.id %}?edit=true" class="btn btn-outline-primary">
+                <a href="{% url 'homeworks:edit' data.id %}" class="btn btn-outline-primary">
                     <i class="bi bi-pencil"></i> Edit
                 </a>
             </div>

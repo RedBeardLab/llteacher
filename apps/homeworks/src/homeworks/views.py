@@ -21,7 +21,7 @@ from django.contrib import messages
 from llteacher.permissions.decorators import teacher_required, student_required, section_access_required
 
 from .models import Homework, Section, SectionSolution
-from .services import HomeworkService, HomeworkCreateData, SectionCreateData
+from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData
 from .forms import HomeworkForm, SectionForm, SectionFormSet
 
 
@@ -311,6 +311,182 @@ class HomeworkCreateView(View):
             section_forms=section_formset,
             user_type='teacher',
             action='create',
+            is_submitted=False,
+            errors=errors
+        )
+
+
+class HomeworkEditView(View):
+    """View for editing an existing homework."""
+    
+    @method_decorator(login_required, name='dispatch')
+    @method_decorator(teacher_required, name='dispatch')
+    def dispatch(self, *args, **kwargs):
+        """Ensure user is a logged-in teacher."""
+        return super().dispatch(*args, **kwargs)
+    
+    def get(self, request: HttpRequest, homework_id: UUID) -> HttpResponse:
+        """Handle GET requests to display the edit form with existing data."""
+        # Get the homework and check ownership
+        try:
+            homework = Homework.objects.get(id=homework_id)
+            if homework.created_by != request.user.teacher_profile:
+                return HttpResponseForbidden("You don't have permission to edit this homework.")
+        except Homework.DoesNotExist:
+            messages.error(request, "Homework not found.")
+            return redirect('homeworks:list')
+            
+        # Get view data with existing homework
+        data = self._get_view_data(request, homework)
+        return render(request, 'homeworks/form.html', {'data': data})
+    
+    def post(self, request: HttpRequest, homework_id: UUID) -> HttpResponse:
+        """Handle POST requests to process the form submission."""
+        # Get the homework and check ownership
+        try:
+            homework = Homework.objects.get(id=homework_id)
+            if homework.created_by != request.user.teacher_profile:
+                return HttpResponseForbidden("You don't have permission to edit this homework.")
+        except Homework.DoesNotExist:
+            messages.error(request, "Homework not found.")
+            return redirect('homeworks:list')
+            
+        # Process the form submission
+        data = self._process_form_submission(request, homework)
+        
+        if data.is_submitted:
+            messages.success(request, "Homework updated successfully!")
+            return redirect('homeworks:detail', homework_id=homework_id)
+        
+        return render(request, 'homeworks/form.html', {'data': data})
+    
+    def _get_view_data(self, request: HttpRequest, homework: Homework) -> HomeworkFormData:
+        """Prepare data for the form view with existing homework data."""
+        # Create homework form with instance
+        form = HomeworkForm(instance=homework)
+        
+        # Get existing sections for this homework
+        sections = homework.sections.all().order_by('order')
+        initial_section_data = []
+        
+        # Prepare initial data for section formset
+        for section in sections:
+            section_data = {
+                'id': section.id,
+                'title': section.title,
+                'content': section.content,
+                'order': section.order,
+                'solution': section.solution.content if section.solution else ''
+            }
+            initial_section_data.append(section_data)
+        
+        # Create section formset with initial data
+        SectionFormset = formset_factory(SectionForm, extra=0, formset=SectionFormSet)
+        section_formset = SectionFormset(
+            prefix='sections',
+            initial=initial_section_data
+        )
+        
+        # Return form data
+        return HomeworkFormData(
+            form=form,
+            section_forms=section_formset,
+            user_type='teacher',
+            action='edit',
+            is_submitted=False
+        )
+    
+    def _process_form_submission(self, request: HttpRequest, homework: Homework) -> HomeworkFormData:
+        """Process the form submission for updating a homework."""
+        # Create forms from POST data with homework instance
+        form = HomeworkForm(request.POST, instance=homework)
+        
+        # Create formset for sections
+        SectionFormset = formset_factory(SectionForm, extra=0, formset=SectionFormSet)
+        section_formset = SectionFormset(request.POST, prefix='sections')
+        
+        # Check form validity
+        if form.is_valid() and section_formset.is_valid():
+            # Save basic homework data
+            homework = form.save()
+            
+            # Process sections
+            sections_to_update = []
+            sections_to_create = []
+            sections_to_delete = []
+            
+            for section_form in section_formset:
+                if not section_form.cleaned_data:
+                    continue
+                    
+                if section_form.cleaned_data.get('DELETE', False):
+                    # Section marked for deletion
+                    if section_form.cleaned_data.get('id'):
+                        sections_to_delete.append(section_form.cleaned_data['id'])
+                else:
+                    # Get section data
+                    section_data = {
+                        'title': section_form.cleaned_data['title'],
+                        'content': section_form.cleaned_data['content'],
+                        'order': section_form.cleaned_data['order'],
+                        'solution': section_form.cleaned_data['solution']
+                    }
+                    
+                    if section_form.cleaned_data.get('id'):
+                        # Existing section to update
+                        section_data['id'] = section_form.cleaned_data['id']
+                        sections_to_update.append(section_data)
+                    else:
+                        # New section to create
+                        sections_to_create.append(SectionCreateData(
+                            title=section_data['title'],
+                            content=section_data['content'],
+                            order=section_data['order'],
+                            solution=section_data['solution']
+                        ))
+            
+            # Create update data
+            update_data = HomeworkUpdateData(
+                title=homework.title,
+                description=homework.description,
+                due_date=homework.due_date,
+                llm_config=homework.llm_config.id if homework.llm_config else None,
+                sections_to_update=sections_to_update,
+                sections_to_create=sections_to_create,
+                sections_to_delete=sections_to_delete
+            )
+            
+            # Update homework using service
+            result = HomeworkService.update_homework(homework.id, update_data)
+            
+            if result.success:
+                # Return success data
+                return HomeworkFormData(
+                    form=form,
+                    section_forms=section_formset,
+                    user_type='teacher',
+                    action='edit',
+                    is_submitted=True
+                )
+            else:
+                # Service error
+                messages.error(request, f"Error updating homework: {result.error}")
+        
+        # Form validation error or service error
+        errors = {}
+        if form.errors:
+            errors['homework'] = form.errors
+        if section_formset.errors:
+            errors['sections'] = section_formset.errors
+        if section_formset.non_form_errors():
+            errors['formset'] = section_formset.non_form_errors()
+        
+        # Return form data with errors
+        return HomeworkFormData(
+            form=form,
+            section_forms=section_formset,
+            user_type='teacher',
+            action='edit',
             is_submitted=False,
             errors=errors
         )
