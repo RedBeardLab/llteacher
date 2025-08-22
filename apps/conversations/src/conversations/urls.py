@@ -10,4 +10,5 @@ app_name = 'conversations'
 urlpatterns = [
     path('section/<uuid:section_id>/start/', views.ConversationStartView.as_view(), name='start'),
     path('<uuid:conversation_id>/', views.ConversationDetailView.as_view(), name='detail'),
+    path('<uuid:conversation_id>/send/', views.MessageSendView.as_view(), name='send_message'),
 ]

@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Conversation - {{ conversation_data.section_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-10 offset-md-1">
+            <!-- Navigation breadcrumb -->
+            {% if conversation_data.homework_id %}
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'homeworks:list' %}">Homeworks</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'homeworks:detail' homework_id=conversation_data.homework_id %}">{{ conversation_data.homework_title }}</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'homeworks:section_detail' homework_id=conversation_data.homework_id section_id=conversation_data.section_id %}">{{ conversation_data.section_title }}</a></li>
+                    <li class="breadcrumb-item active">Conversation</li>
+                </ol>
+            </nav>
+            {% endif %}
+
+            <!-- Card container -->
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h2 class="mb-0">Conversation for {{ conversation_data.section_title }}</h2>
+                    {% if not conversation_data.is_teacher_test and conversation_data.can_submit %}
+                    <a href="#" class="btn btn-success">Submit this conversation</a>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if conversation_data.is_teacher_test %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> You're viewing this conversation as a teacher.
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Messages container -->
+                    <div class="conversation-container">
+                        {% if conversation_data.messages %}
+                            {% for message in conversation_data.messages %}
+                            <div class="message-container {{ message.css_class }} mb-3">
+                                <div class="message-header">
+                                    {% if message.is_from_student %}
+                                    <span class="badge bg-primary">Student</span>
+                                    {% elif message.is_from_ai %}
+                                    <span class="badge bg-success">AI Tutor</span>
+                                    {% elif message.is_system_message %}
+                                    <span class="badge bg-secondary">System</span>
+                                    {% else %}
+                                    <span class="badge bg-info">Other</span>
+                                    {% endif %}
+                                    <small class="text-muted">{{ message.timestamp|date:"M d, Y H:i" }}</small>
+                                </div>
+                                <div class="message-content p-3 rounded">
+                                    {% if message.message_type == 'r_code' %}
+                                    <pre><code class="language-r">{{ message.content }}</code></pre>
+                                    {% elif message.message_type == 'code_execution' %}
+                                    <pre><code class="output">{{ message.content }}</code></pre>
+                                    {% else %}
+                                    <p>{{ message.content|linebreaksbr }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-warning">
+                                No messages in this conversation yet.
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Message input form -->
+                    {% if not conversation_data.is_teacher_test or user.id == conversation_data.user_id %}
+                    <div class="mt-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <form method="post" action="{% url 'conversations:send_message' conversation_id=conversation_data.id %}" id="message-form">
+                                    {% csrf_token %}
+                                    <div class="form-group">
+                                        <label for="content">Your message:</label>
+                                        <textarea class="form-control" id="content" name="content" rows="3" required></textarea>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-3">
+                                        <div class="form-group mb-0">
+                                            <select class="form-control" id="message_type" name="message_type">
+                                                <option value="student">Student Message</option>
+                                                <option value="r_code">R Code</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary">
+                                            Send Message
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mt-4">
+                        <i class="fas fa-info-circle"></i> 
+                        You are viewing this conversation as a teacher and cannot send messages.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Back button -->
+            {% if conversation_data.homework_id %}
+            <div class="mt-3">
+                <a href="{% url 'homeworks:section_detail' homework_id=conversation_data.homework_id section_id=conversation_data.section_id %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Section
+                </a>
+            </div>
+            {% else %}
+            <div class="mt-3">
+                <a href="{% url 'homeworks:list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Homeworks
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- CSS for conversation styling -->
+<style>
+    .conversation-container {
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-radius: 0.25rem;
+    }
+    
+    .message-student .message-content {
+        background-color: #e3f2fd;
+        border-left: 4px solid #007bff;
+    }
+    
+    .message-ai .message-content {
+        background-color: #f1f8e9;
+        border-left: 4px solid #4caf50;
+    }
+    
+    .message-system .message-content {
+        background-color: #f5f5f5;
+        border-left: 4px solid #9e9e9e;
+    }
+    
+    pre {
+        margin-bottom: 0;
+    }
+    
+    code.language-r {
+        display: block;
+        padding: 0.5rem;
+        background-color: #282c34;
+        color: #abb2bf;
+        border-radius: 0.25rem;
+        overflow-x: auto;
+    }
+    
+    code.output {
+        display: block;
+        padding: 0.5rem;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        overflow-x: auto;
+        color: #212529;
+    }
+</style>
+{% endblock %}
