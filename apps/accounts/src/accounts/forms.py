@@ -5,7 +5,7 @@ This module provides forms for user registration and authentication,
 following the testable-first architecture.
 """
 from django import forms
-from django.contrib.auth import get_user_model, authenticate
+from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.core.exceptions import ValidationError
 

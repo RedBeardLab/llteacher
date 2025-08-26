@@ -5,7 +5,7 @@ This module tests the user profile management functionality.
 """
 from django.test import TestCase, Client
 from django.urls import reverse
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from accounts.models import User, Teacher, Student
 

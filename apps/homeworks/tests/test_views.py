@@ -13,7 +13,7 @@ from unittest.mock import patch, MagicMock
 import uuid
 
 from homeworks.models import Homework, Section
-from homeworks.views import HomeworkListView, HomeworkListData, HomeworkListItem
+from homeworks.views import HomeworkListView, HomeworkListData
 from accounts.models import Teacher, Student
 
 User = get_user_model()

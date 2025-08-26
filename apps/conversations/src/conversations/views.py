@@ -4,7 +4,7 @@ Views for the conversations app.
 This module provides views for managing conversations between users and AI tutors,
 following the testable-first architecture with typed data contracts.
 """
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Dict, Optional, List, Any
 from uuid import UUID
 from datetime import datetime
@@ -13,12 +13,11 @@ from django.views import View
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 
-from homeworks.models import Section, Homework
-from .models import Conversation, Message, Submission
+from homeworks.models import Section
+from .models import Conversation, Submission
 from .services import ConversationService, SubmissionService
 
 

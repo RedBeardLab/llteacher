@@ -6,7 +6,7 @@ This module tests the user login functionality.
 from django.test import TestCase, Client
 from django.urls import reverse
 
-from accounts.models import User, Teacher, Student
+from accounts.models import User, Teacher
 
 
 class UserLoginViewTests(TestCase):

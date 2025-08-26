@@ -6,7 +6,7 @@ Views for LLM configuration management following testable-first approach.
 from dataclasses import dataclass
 from typing import List, Optional
 from uuid import UUID
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
@@ -15,7 +15,6 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.core.exceptions import ValidationError
 
 from llteacher.permissions.decorators import teacher_required, get_teacher_or_student
-from .models import LLMConfig
 from .services import (
     LLMService, 
     LLMConfigData, 

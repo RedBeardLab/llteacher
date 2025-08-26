@@ -5,9 +5,8 @@ This module tests the user registration functionality for both teacher and stude
 """
 from django.test import TestCase, Client
 from django.urls import reverse
-from unittest.mock import patch
 
-from accounts.models import User, Teacher, Student
+from accounts.models import User
 
 
 class UserRegistrationViewTests(TestCase):

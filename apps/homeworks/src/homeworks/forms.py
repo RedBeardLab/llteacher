@@ -5,10 +5,9 @@ This module provides forms for creating and editing homeworks and sections,
 following the testable-first architecture.
 """
 from django import forms
-from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 
-from .models import Homework, Section, SectionSolution
+from .models import Homework
 
 
 class SectionForm(forms.Form):

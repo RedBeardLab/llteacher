@@ -5,7 +5,7 @@ This module contains tests for the permission decorators used to control
 access to views based on user roles and object ownership.
 """
 from uuid import uuid4
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 from django.test import TestCase, RequestFactory
 from django.http import HttpResponse, HttpResponseForbidden
@@ -16,9 +16,7 @@ from llteacher.permissions.decorators import (
     teacher_required,
     student_required,
     homework_owner_required,
-    section_access_required,
-    conversation_access_required,
-    submission_access_required
+    section_access_required
 )
 
 User = get_user_model()

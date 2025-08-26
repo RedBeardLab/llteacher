@@ -7,12 +7,12 @@ existing homework assignments and their sections.
 import uuid
 from django.test import TestCase, Client
 from django.urls import reverse
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import datetime
 
 from accounts.models import User, Teacher, Student
 from homeworks.models import Homework, Section, SectionSolution
-from homeworks.services import HomeworkUpdateData, HomeworkUpdateResult
+from homeworks.services import HomeworkUpdateResult
 
 
 class HomeworkEditViewTestCase(TestCase):

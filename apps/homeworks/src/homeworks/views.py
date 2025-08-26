@@ -5,22 +5,21 @@ This module provides views for managing homework assignments and their sections,
 following the testable-first architecture with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 from django.forms import formset_factory
 
 from django.views import View
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Count, Prefetch
 from django.utils import timezone
 from django.contrib import messages
 
-from llteacher.permissions.decorators import teacher_required, student_required, section_access_required
+from llteacher.permissions.decorators import teacher_required
 
-from .models import Homework, Section, SectionSolution
+from .models import Homework, Section
 from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData
 from .forms import HomeworkForm, SectionForm, SectionFormSet
 

@@ -7,13 +7,12 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from unittest.mock import patch, MagicMock
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.utils import timezone
 
 from accounts.models import User, Teacher, Student
 from homeworks.models import Homework, Section
 from conversations.models import Conversation, Message
-from conversations.services import ConversationService
 
 
 class MessageSendViewTests(TestCase):

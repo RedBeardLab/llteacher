@@ -8,13 +8,11 @@ the testing-first architecture approach.
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from django.http import JsonResponse
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import json
-import uuid
 
 from llm.models import LLMConfig
-from llm.services import LLMConfigData, LLMResponseResult
+from llm.services import LLMResponseResult
 from accounts.models import Teacher, Student
 
 User = get_user_model()

@@ -7,7 +7,6 @@ with its conversations and submission information.
 import uuid
 from django.test import TestCase, Client
 from django.urls import reverse
-from unittest.mock import patch, MagicMock
 
 from accounts.models import User, Teacher, Student
 from homeworks.models import Homework, Section, SectionSolution
@@ -36,7 +35,6 @@ class SectionDetailViewTestCase(TestCase):
         self.student = Student.objects.create(user=self.student_user)
         
         # Create homework with timezone-naive datetime
-        from django.utils import timezone
         import datetime
         
         # Use a naive datetime object for the test

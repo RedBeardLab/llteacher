@@ -3,7 +3,6 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
-import uuid
 
 from accounts.models import Teacher, Student
 from llm.models import LLMConfig

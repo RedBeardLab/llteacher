@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, TYPE_CHECKING
 from uuid import UUID
 import logging
-import os
 
 # Handle imports for type checking
 if TYPE_CHECKING:

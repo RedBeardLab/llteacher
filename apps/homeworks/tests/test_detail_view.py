@@ -9,11 +9,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from datetime import timedelta
-from unittest.mock import patch, MagicMock
 import uuid
 
 from homeworks.models import Homework, Section, SectionSolution
-from homeworks.views import HomeworkDetailView, HomeworkDetailData, SectionDetailData
+from homeworks.views import HomeworkDetailView, HomeworkDetailData
 from accounts.models import Teacher, Student
 
 User = get_user_model()
