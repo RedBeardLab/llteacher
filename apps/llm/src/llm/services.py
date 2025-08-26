@@ -5,9 +5,17 @@ This module provides services for configuring and interacting with language mode
 Following a testable-first approach with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 from uuid import UUID
 import logging
+import os
+
+# Handle imports for type checking
+if TYPE_CHECKING:
+    from conversations.models import Conversation
+    from .models import LLMConfig
+
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +39,36 @@ class LLMResponseResult:
     success: bool = True
     error: Optional[str] = None
 
+@dataclass
+class LLMConfigCreateData:
+    name: str
+    model_name: str
+    api_key: str
+    base_prompt: str
+    temperature: float = 0.7
+    max_tokens: int = 1000
+    is_default: bool = False
+    is_active: bool = True
+
+@dataclass
+class LLMConfigCreateResult:
+    config_id: Optional[UUID] = None
+    success: bool = True
+    error: Optional[str] = None
+
+@dataclass
+class LLMConfigUpdateResult:
+    success: bool = True
+    error: Optional[str] = None
+
+@dataclass
+class ConversationContext:
+    section_title: str
+    section_content: str
+    homework_title: str
+    messages: List[Dict[str, str]]  # List of {"role": "user/assistant", "content": "..."}
+    current_message: str
+    message_type: str
 
 class LLMService:
     """
@@ -53,8 +91,6 @@ class LLMService:
         Returns:
             String containing the AI response
         """
-        import requests
-        
         try:
             # Get LLM config - first from the homework, then fallback to default
             llm_config = None
@@ -71,51 +107,150 @@ class LLMService:
                 from .models import LLMConfig
                 llm_config = LLMConfig.objects.get(id=config_data.id)
             
-            # Get API key from config
-            api_key = llm_config.api_key
-            if not api_key:
-                logger.error("API key not found in LLM configuration")
-                return "I'm sorry, but there was an error connecting to the AI service. Please contact support."
+            # Build conversation context
+            context = LLMService._build_conversation_context(conversation, content, message_type)
             
-            # Build prompt
-            prompt = LLMService._build_prompt(conversation, content, message_type)
+            # Generate response using OpenAI client
+            response_result = LLMService._generate_openai_response(llm_config, context)
             
-            # Call OpenAI API (assuming OpenAI-compatible API)
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}"
-            }
-            
-            # Construct the request body based on the model being used
-            # This assumes OpenAI-like API structure
-            request_body = {
-                "model": llm_config.model_name,
-                "messages": [
-                    {"role": "system", "content": llm_config.base_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": llm_config.temperature,
-                "max_tokens": llm_config.max_tokens
-            }
-            
-            # Make API call
-            response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=request_body
-            )
-            
-            # Parse response
-            response_json = response.json()
-            if 'choices' in response_json and len(response_json['choices']) > 0:
-                return response_json['choices'][0]['message']['content']
+            if response_result.success:
+                return response_result.response_text
             else:
-                logger.error(f"Unexpected API response: {response_json}")
+                logger.error(f"LLM response generation failed: {response_result.error}")
                 return "I'm sorry, but I couldn't generate a response. Please try again."
         
         except Exception as e:
             logger.error(f"Error generating AI response: {str(e)}")
             return "I'm sorry, but there was an error generating a response. Please try again."
+    
+    @staticmethod
+    def _generate_openai_response(llm_config: 'LLMConfig', context: ConversationContext) -> LLMResponseResult:
+        """
+        Generate response using OpenAI client.
+        
+        Args:
+            llm_config: LLM configuration object
+            context: Conversation context data
+            
+        Returns:
+            LLMResponseResult with response or error
+        """
+        try:
+            # Initialize OpenAI client
+            client = OpenAI(api_key=llm_config.api_key)
+            
+            # Build messages for OpenAI API with proper typing
+            messages = [
+                {"role": "system", "content": llm_config.base_prompt}
+            ]
+            
+            # Add conversation history
+            for msg in context.messages:
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+            
+            # Add current message with context
+            current_prompt = LLMService._build_current_prompt(context)
+            messages.append({"role": "user", "content": current_prompt})
+            
+            # Make API call
+            response = client.chat.completions.create(
+                model=llm_config.model_name,
+                messages=messages,
+                temperature=llm_config.temperature,
+                max_tokens=llm_config.max_tokens
+            )
+            
+            # Extract response
+            if response.choices and len(response.choices) > 0:
+                response_text = response.choices[0].message.content or ""
+                tokens_used = response.usage.total_tokens if response.usage else 0
+                
+                return LLMResponseResult(
+                    response_text=response_text,
+                    tokens_used=tokens_used,
+                    success=True
+                )
+            else:
+                return LLMResponseResult(
+                    response_text="",
+                    tokens_used=0,
+                    success=False,
+                    error="No response generated from OpenAI API"
+                )
+        
+        except Exception as e:
+            logger.error(f"OpenAI API error: {str(e)}")
+            return LLMResponseResult(
+                response_text="",
+                tokens_used=0,
+                success=False,
+                error=str(e)
+            )
+    
+    @staticmethod
+    def _build_conversation_context(conversation: 'Conversation', content: str, message_type: str) -> ConversationContext:
+        """
+        Build conversation context for LLM prompt.
+        
+        Args:
+            conversation: Conversation object
+            content: Latest message content
+            message_type: Type of message
+            
+        Returns:
+            ConversationContext with all relevant data
+        """
+        # Get previous messages
+        messages = []
+        for msg in conversation.messages.all().order_by('timestamp'):
+            if msg.is_from_student:
+                messages.append({"role": "user", "content": msg.content})
+            elif msg.is_from_ai:
+                messages.append({"role": "assistant", "content": msg.content})
+            # Skip system messages for OpenAI context
+        
+        return ConversationContext(
+            section_title=conversation.section.title,
+            section_content=conversation.section.content,
+            homework_title=conversation.section.homework.title,
+            messages=messages,
+            current_message=content,
+            message_type=message_type
+        )
+    
+    @staticmethod
+    def _build_current_prompt(context: ConversationContext) -> str:
+        """
+        Build the current prompt with section context.
+        
+        Args:
+            context: Conversation context data
+            
+        Returns:
+            String containing the prompt for the language model
+        """
+        # Build context parts
+        context_parts = [
+            f"Homework: {context.homework_title}",
+            f"Section: {context.section_title}",
+            f"Section Content: {context.section_content}",
+        ]
+        
+        # Add current message based on type
+        if context.message_type == 'student':
+            context_parts.append(f"\nStudent Question: {context.current_message}")
+        elif context.message_type == 'code':
+            context_parts.append(f"\nStudent Code Submission:\n```\n{context.current_message}\n```")
+        else:
+            context_parts.append(f"\nStudent Message: {context.current_message}")
+        
+        # Add instruction
+        context_parts.append("\nPlease respond as an AI tutor helping the student with this section. Guide them without giving away the complete answer.")
+        
+        return "\n\n".join(context_parts)
     
     @staticmethod
     def get_default_config() -> Optional[LLMConfigData]:
@@ -150,53 +285,116 @@ class LLMService:
             return None
     
     @staticmethod
-    def create_config(data: Dict[str, Any]) -> UUID:
+    def get_config_by_id(config_id: UUID) -> Optional[LLMConfigData]:
+        """
+        Get LLM configuration by ID.
+        
+        Args:
+            config_id: UUID of the configuration
+            
+        Returns:
+            LLMConfigData if found, None otherwise
+        """
+        from .models import LLMConfig
+        
+        try:
+            config = LLMConfig.objects.get(id=config_id, is_active=True)
+            
+            return LLMConfigData(
+                id=config.id,
+                name=config.name,
+                model_name=config.model_name,
+                api_key=config.api_key,
+                base_prompt=config.base_prompt,
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
+                is_default=config.is_default,
+                is_active=config.is_active
+            )
+        except LLMConfig.DoesNotExist:
+            return None
+        except Exception as e:
+            logger.error(f"Error getting LLM config by ID: {str(e)}")
+            return None
+    
+    @staticmethod
+    def get_all_configs() -> List[LLMConfigData]:
+        """
+        Get all active LLM configurations.
+        
+        Returns:
+            List of LLMConfigData objects
+        """
+        from .models import LLMConfig
+        
+        try:
+            configs = LLMConfig.objects.filter(is_active=True).order_by('name')
+            
+            return [
+                LLMConfigData(
+                    id=config.id,
+                    name=config.name,
+                    model_name=config.model_name,
+                    api_key=config.api_key,
+                    base_prompt=config.base_prompt,
+                    temperature=config.temperature,
+                    max_tokens=config.max_tokens,
+                    is_default=config.is_default,
+                    is_active=config.is_active
+                ) for config in configs
+            ]
+        except Exception as e:
+            logger.error(f"Error getting all LLM configs: {str(e)}")
+            return []
+    
+    @staticmethod
+    def create_config(data: LLMConfigCreateData) -> LLMConfigCreateResult:
         """
         Create a new LLM configuration.
         
         Args:
-            data: Dictionary with configuration parameters
+            data: LLMConfigCreateData with configuration parameters
             
         Returns:
-            UUID of the created configuration
+            LLMConfigCreateResult with success status and config ID
         """
         from .models import LLMConfig
         
-        # Extract fields from data
-        name = data.get('name')
-        model_name = data.get('model_name')
-        api_key = data.get('api_key')
-        base_prompt = data.get('base_prompt')
-        temperature = data.get('temperature', 0.7)
-        max_tokens = data.get('max_tokens', 1000)
-        is_default = data.get('is_default', False)
-        is_active = data.get('is_active', True)
-        
-        # Create config
-        config = LLMConfig.objects.create(
-            name=name,
-            model_name=model_name,
-            api_key=api_key,
-            base_prompt=base_prompt,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            is_default=is_default,
-            is_active=is_active
-        )
-        
-        return config.id
+        try:
+            # Create config
+            config = LLMConfig.objects.create(
+                name=data.name,
+                model_name=data.model_name,
+                api_key=data.api_key,
+                base_prompt=data.base_prompt,
+                temperature=data.temperature,
+                max_tokens=data.max_tokens,
+                is_default=data.is_default,
+                is_active=data.is_active
+            )
+            
+            return LLMConfigCreateResult(
+                config_id=config.id,
+                success=True
+            )
+        except Exception as e:
+            logger.error(f"Error creating LLM config: {str(e)}")
+            return LLMConfigCreateResult(
+                success=False,
+                error=str(e)
+            )
     
     @staticmethod
-    def update_config(config_id: UUID, data: Dict[str, Any]) -> bool:
+    def update_config(config_id: UUID, data: Dict[str, Any]) -> LLMConfigUpdateResult:
         """
         Update an existing LLM configuration.
         
         Args:
             config_id: UUID of the configuration to update
-            data: Dictionary with configuration parameters
+            data: Dictionary with configuration parameters to update
             
         Returns:
-            True if updated successfully, False otherwise
+            LLMConfigUpdateResult with success status
         """
         from .models import LLMConfig
         
@@ -225,51 +423,104 @@ class LLMService:
             # Save changes
             config.save()
             
-            return True
+            return LLMConfigUpdateResult(success=True)
         except LLMConfig.DoesNotExist:
-            return False
+            return LLMConfigUpdateResult(
+                success=False,
+                error="Configuration not found"
+            )
         except Exception as e:
             logger.error(f"Error updating LLM config: {str(e)}")
-            return False
+            return LLMConfigUpdateResult(
+                success=False,
+                error=str(e)
+            )
     
     @staticmethod
-    def _build_prompt(conversation: 'Conversation', content: str, message_type: str) -> str:
+    def delete_config(config_id: UUID) -> LLMConfigUpdateResult:
         """
-        Build the prompt to send to the language model.
+        Delete (deactivate) an LLM configuration.
         
         Args:
-            conversation: Conversation object
-            content: Latest message content
-            message_type: Type of message
+            config_id: UUID of the configuration to delete
             
         Returns:
-            String containing the prompt for the language model
+            LLMConfigUpdateResult with success status
         """
-        # Get conversation context
-        context_parts = [
-            f"Section Title: {conversation.section.title}",
-            f"Section Content: {conversation.section.content}",
-            "\nPrevious Messages:\n"
-        ]
+        from .models import LLMConfig
         
-        # Add previous messages
-        for msg in conversation.messages.all().order_by('timestamp'):
-            if msg.is_from_student:
-                context_parts.append(f"Student: {msg.content}")
-            elif msg.is_from_ai:
-                context_parts.append(f"AI Tutor: {msg.content}")
-            elif msg.is_system_message:
-                context_parts.append(f"System: {msg.content}")
-        
-        # Add current message
-        if message_type == 'student':
-            context_parts.append(f"\nCurrent Message - Student: {content}")
-        elif message_type == 'code':
-            context_parts.append(f"\nCurrent Message - Student Code Submission:\n```r\n{content}\n```")
-        
-        # Instruction to the AI
-        context_parts.append("\nPlease respond as an AI tutor helping the student with this section.")
-        
-        return "\n\n".join(context_parts)
+        try:
+            config = LLMConfig.objects.get(id=config_id)
+            
+            # Don't allow deleting the default config
+            if config.is_default:
+                return LLMConfigUpdateResult(
+                    success=False,
+                    error="Cannot delete the default configuration"
+                )
+            
+            # Soft delete by setting is_active to False
+            config.is_active = False
+            config.save()
+            
+            return LLMConfigUpdateResult(success=True)
+        except LLMConfig.DoesNotExist:
+            return LLMConfigUpdateResult(
+                success=False,
+                error="Configuration not found"
+            )
+        except Exception as e:
+            logger.error(f"Error deleting LLM config: {str(e)}")
+            return LLMConfigUpdateResult(
+                success=False,
+                error=str(e)
+            )
     
-    # Removing _get_api_key method as we now get the API key directly from config
+    @staticmethod
+    def test_config(config_id: UUID, test_message: str = "Hello, this is a test message.") -> LLMResponseResult:
+        """
+        Test an LLM configuration with a simple message.
+        
+        Args:
+            config_id: UUID of the configuration to test
+            test_message: Message to send for testing
+            
+        Returns:
+            LLMResponseResult with test response or error
+        """
+        try:
+            # Get config
+            config_data = LLMService.get_config_by_id(config_id)
+            if not config_data:
+                return LLMResponseResult(
+                    response_text="",
+                    tokens_used=0,
+                    success=False,
+                    error="Configuration not found"
+                )
+            
+            # Create test context
+            test_context = ConversationContext(
+                section_title="Test Section",
+                section_content="This is a test section for configuration validation.",
+                homework_title="Test Homework",
+                messages=[],
+                current_message=test_message,
+                message_type="student"
+            )
+            
+            # Get LLM config object
+            from .models import LLMConfig
+            llm_config = LLMConfig.objects.get(id=config_id)
+            
+            # Generate test response
+            return LLMService._generate_openai_response(llm_config, test_context)
+            
+        except Exception as e:
+            logger.error(f"Error testing LLM config: {str(e)}")
+            return LLMResponseResult(
+                response_text="",
+                tokens_used=0,
+                success=False,
+                error=str(e)
+            )

@@ -13,7 +13,10 @@ import uuid
 from llm.models import LLMConfig
 from llm.services import (
     LLMService, 
-    LLMConfigData
+    LLMConfigData,
+    LLMConfigCreateData,
+    LLMConfigCreateResult,
+    LLMConfigUpdateResult
 )
 
 User = get_user_model()
@@ -53,29 +56,31 @@ class TestLLMServiceConfig(LLMServiceTestCase):
     
     def test_create_config(self):
         """Test creating a new LLM configuration."""
-        # Create new config data
-        config_data = {
-            "name": "New Config",
-            "model_name": "new-model",
-            "api_key": "new-test-api-key-67890",
-            "base_prompt": "You are a new AI tutor.",
-            "temperature": 0.5,
-            "max_tokens": 2000,
-            "is_default": False,
-            "is_active": True
-        }
+        # Create new config data using typed dataclass
+        config_data = LLMConfigCreateData(
+            name="New Config",
+            model_name="new-model",
+            api_key="new-test-api-key-67890",
+            base_prompt="You are a new AI tutor.",
+            temperature=0.5,
+            max_tokens=2000,
+            is_default=False,
+            is_active=True
+        )
         
         # Create config
-        config_id = LLMService.create_config(config_data)
+        result = LLMService.create_config(config_data)
         
         # Check result
-        self.assertIsNotNone(config_id)
+        self.assertIsInstance(result, LLMConfigCreateResult)
+        self.assertTrue(result.success)
+        self.assertIsNotNone(result.config_id)
         
         # Check config was created
-        new_config = LLMConfig.objects.get(id=config_id)
-        self.assertEqual(new_config.name, config_data["name"])
-        self.assertEqual(new_config.model_name, config_data["model_name"])
-        self.assertEqual(new_config.temperature, config_data["temperature"])
+        new_config = LLMConfig.objects.get(id=result.config_id)
+        self.assertEqual(new_config.name, config_data.name)
+        self.assertEqual(new_config.model_name, config_data.model_name)
+        self.assertEqual(new_config.temperature, config_data.temperature)
         
     def test_update_config(self):
         """Test updating an existing LLM configuration."""
@@ -89,7 +94,8 @@ class TestLLMServiceConfig(LLMServiceTestCase):
         result = LLMService.update_config(self.llm_config.id, update_data)
         
         # Check result
-        self.assertTrue(result)
+        self.assertIsInstance(result, LLMConfigUpdateResult)
+        self.assertTrue(result.success)
         
         # Check config was updated
         updated_config = LLMConfig.objects.get(id=self.llm_config.id)
@@ -133,26 +139,21 @@ class TestLLMServiceResponses(LLMServiceTestCase):
         self.conversation.messages.all.return_value = messages_qs
         self.conversation.section.homework.llm_config = self.llm_config
     
-    @patch('requests.post')
-    @patch('logging.Logger.error')
-    def test_get_response(self, mock_logger, mock_post):
+    @patch('llm.services.OpenAI')
+    def test_get_response(self, mock_openai_class):
         """Test generating an AI response."""
         
-        # Mock API response
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "content": "This is a test AI response."
-                    }
-                }
-            ],
-            "usage": {
-                "total_tokens": 20
-            }
-        }
-        mock_post.return_value = mock_response
+        # Mock OpenAI client and response
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+        
+        # Mock the completion response
+        mock_completion = MagicMock()
+        mock_completion.choices = [MagicMock()]
+        mock_completion.choices[0].message.content = "This is a test AI response."
+        mock_completion.usage.total_tokens = 20
+        
+        mock_client.chat.completions.create.return_value = mock_completion
         
         # Get response
         response = LLMService.get_response(
@@ -161,16 +162,13 @@ class TestLLMServiceResponses(LLMServiceTestCase):
             "student"
         )
         
-        # Print debug info if the response is not what we expect
-        if response != "This is a test AI response.":
-            print(f"Actual response: {response}")
-            print(f"Logger calls: {mock_logger.call_args_list}")
-            print(f"Mock post calls: {mock_post.call_args_list}")
-        
         # Check result
         self.assertEqual(response, "This is a test AI response.")
         
-        # Check API was called with correct data
-        mock_post.assert_called_once()
+        # Check OpenAI client was initialized with correct API key
+        mock_openai_class.assert_called_once_with(api_key=self.llm_config.api_key)
+        
+        # Check API was called
+        mock_client.chat.completions.create.assert_called_once()
         
     # We no longer need to test _get_api_key as we now get the API key directly from config

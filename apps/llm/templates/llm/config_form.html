@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}{{ data.form_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">{{ data.form_title }}</h4>
+                </div>
+                <div class="card-body">
+                    {% if errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                                {% for error in errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Configuration Name *</label>
+                                    <input type="text" class="form-control" id="name" name="name" 
+                                           value="{% if data.config %}{{ data.config.name }}{% elif form_data %}{{ form_data.name }}{% endif %}" 
+                                           required>
+                                    <div class="form-text">A descriptive name for this configuration</div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="model_name" class="form-label">Model Name *</label>
+                                    <select class="form-select" id="model_name" name="model_name" required>
+                                        <option value="">Select a model...</option>
+                                        <option value="gpt-4" {% if data.config.model_name == 'gpt-4' or form_data.model_name == 'gpt-4' %}selected{% endif %}>GPT-4</option>
+                                        <option value="gpt-4-turbo" {% if data.config.model_name == 'gpt-4-turbo' or form_data.model_name == 'gpt-4-turbo' %}selected{% endif %}>GPT-4 Turbo</option>
+                                        <option value="gpt-3.5-turbo" {% if data.config.model_name == 'gpt-3.5-turbo' or form_data.model_name == 'gpt-3.5-turbo' %}selected{% endif %}>GPT-3.5 Turbo</option>
+                                        <option value="gpt-4o" {% if data.config.model_name == 'gpt-4o' or form_data.model_name == 'gpt-4o' %}selected{% endif %}>GPT-4o</option>
+                                        <option value="gpt-4o-mini" {% if data.config.model_name == 'gpt-4o-mini' or form_data.model_name == 'gpt-4o-mini' %}selected{% endif %}>GPT-4o Mini</option>
+                                    </select>
+                                    <div class="form-text">The OpenAI model to use</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="api_key" class="form-label">API Key *</label>
+                            <input type="password" class="form-control" id="api_key" name="api_key" 
+                                   value="{% if data.config %}{{ data.config.api_key }}{% elif form_data %}{{ form_data.api_key }}{% endif %}" 
+                                   required>
+                            <div class="form-text">Your OpenAI API key (will be stored securely)</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="base_prompt" class="form-label">Base Prompt *</label>
+                            <textarea class="form-control" id="base_prompt" name="base_prompt" rows="6" required>{% if data.config %}{{ data.config.base_prompt }}{% elif form_data %}{{ form_data.base_prompt }}{% else %}You are an AI tutor helping students learn. Your role is to guide students through problems without giving away the complete answer. Ask leading questions, provide hints, and encourage critical thinking. Be patient, supportive, and adapt your teaching style to each student's needs.{% endif %}</textarea>
+                            <div class="form-text">The system prompt that defines the AI tutor's behavior</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="temperature" class="form-label">Temperature</label>
+                                    <input type="number" class="form-control" id="temperature" name="temperature" 
+                                           min="0" max="2" step="0.1" 
+                                           value="{% if data.config %}{{ data.config.temperature }}{% elif form_data %}{{ form_data.temperature }}{% else %}0.7{% endif %}">
+                                    <div class="form-text">Controls randomness (0.0 = deterministic, 2.0 = very random)</div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="max_tokens" class="form-label">Max Tokens</label>
+                                    <input type="number" class="form-control" id="max_tokens" name="max_tokens" 
+                                           min="1" max="4000" 
+                                           value="{% if data.config %}{{ data.config.max_tokens }}{% elif form_data %}{{ form_data.max_tokens }}{% else %}1000{% endif %}">
+                                    <div class="form-text">Maximum number of tokens in the response</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3 form-check">
+                                    <input type="checkbox" class="form-check-input" id="is_default" name="is_default" 
+                                           {% if data.config.is_default or form_data.is_default %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_default">
+                                        Set as default configuration
+                                    </label>
+                                    <div class="form-text">This will be used when no specific configuration is selected</div>
+                                </div>
+                            </div>
+                            
+                            {% if data.is_edit %}
+                            <div class="col-md-6">
+                                <div class="mb-3 form-check">
+                                    <input type="checkbox" class="form-check-input" id="is_active" name="is_active" 
+                                           {% if data.config.is_active %}checked{% elif form_data.is_active %}checked{% else %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_active">
+                                        Configuration is active
+                                    </label>
+                                    <div class="form-text">Inactive configurations cannot be used</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% if data.config %}{% url 'llm:config-detail' data.config.id %}{% else %}{% url 'llm:config-list' %}{% endif %}" 
+                               class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> 
+                                {% if data.is_edit %}Update Configuration{% else %}Create Configuration{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if not data.is_edit %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Getting Started
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6>How to get an OpenAI API Key:</h6>
+                    <ol>
+                        <li>Visit <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI API Keys</a></li>
+                        <li>Sign in to your OpenAI account (or create one)</li>
+                        <li>Click "Create new secret key"</li>
+                        <li>Copy the key and paste it in the API Key field above</li>
+                        <li>Make sure you have billing set up in your OpenAI account</li>
+                    </ol>
+                    
+                    <h6 class="mt-3">Recommended Settings:</h6>
+                    <ul>
+                        <li><strong>GPT-4o Mini:</strong> Fast and cost-effective for most tutoring tasks</li>
+                        <li><strong>GPT-4:</strong> More capable but slower and more expensive</li>
+                        <li><strong>Temperature 0.7:</strong> Good balance of creativity and consistency</li>
+                        <li><strong>Max Tokens 1000:</strong> Sufficient for most tutoring responses</li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

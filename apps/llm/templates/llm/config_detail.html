@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}{{ data.config.name }} - LLM Configuration{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>{{ data.config.name }}</h1>
+                <div class="btn-group" role="group">
+                    <a href="{% url 'llm:config-list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to List
+                    </a>
+                    {% if data.can_edit %}
+                        <a href="{% url 'llm:config-edit' data.config.id %}" class="btn btn-primary">
+                            <i class="fas fa-edit"></i> Edit
+                        </a>
+                    {% endif %}
+                    {% if data.can_test %}
+                        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#testModal">
+                            <i class="fas fa-flask"></i> Test
+                        </button>
+                    {% endif %}
+                    {% if data.can_delete %}
+                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Configuration Details</h5>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row">
+                                <dt class="col-sm-3">Name:</dt>
+                                <dd class="col-sm-9">{{ data.config.name }}</dd>
+
+                                <dt class="col-sm-3">Model:</dt>
+                                <dd class="col-sm-9">{{ data.config.model_name }}</dd>
+
+                                <dt class="col-sm-3">Temperature:</dt>
+                                <dd class="col-sm-9">{{ data.config.temperature }}</dd>
+
+                                <dt class="col-sm-3">Max Tokens:</dt>
+                                <dd class="col-sm-9">{{ data.config.max_tokens }}</dd>
+
+                                <dt class="col-sm-3">Status:</dt>
+                                <dd class="col-sm-9">
+                                    {% if data.config.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    {% endif %}
+                                    {% if data.config.is_default %}
+                                        <span class="badge bg-primary ms-1">Default</span>
+                                    {% endif %}
+                                </dd>
+
+                                <dt class="col-sm-3">API Key:</dt>
+                                <dd class="col-sm-9">
+                                    <code>{{ data.config.api_key|slice:":8" }}...</code>
+                                    <small class="text-muted">(hidden for security)</small>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Base Prompt</h5>
+                        </div>
+                        <div class="card-body">
+                            <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">{{ data.config.base_prompt }}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Modal -->
+{% if data.can_test %}
+<div class="modal fade" id="testModal" tabindex="-1" aria-labelledby="testModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="testModalLabel">Test Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="testForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="testMessage" class="form-label">Test Message</label>
+                        <textarea class="form-control" id="testMessage" rows="3" placeholder="Enter a test message...">Hello, this is a test message.</textarea>
+                    </div>
+                    <div id="testResult" class="d-none">
+                        <h6>Response:</h6>
+                        <div class="bg-light p-3 rounded">
+                            <div id="testResponse"></div>
+                        </div>
+                        <small class="text-muted">Tokens used: <span id="testTokens">0</span></small>
+                    </div>
+                    <div id="testError" class="alert alert-danger d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-success" id="testButton">
+                        <span class="spinner-border spinner-border-sm d-none" id="testSpinner"></span>
+                        Test Configuration
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete Modal -->
+{% if data.can_delete %}
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Delete Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the configuration <strong>{{ data.config.name }}</strong>?</p>
+                <p class="text-danger"><small>This action cannot be undone.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'llm:config-delete' data.config.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% block extra_js %}
+{% if data.can_test %}
+<script>
+document.getElementById('testForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const button = document.getElementById('testButton');
+    const spinner = document.getElementById('testSpinner');
+    const resultDiv = document.getElementById('testResult');
+    const errorDiv = document.getElementById('testError');
+    const responseDiv = document.getElementById('testResponse');
+    const tokensSpan = document.getElementById('testTokens');
+    const message = document.getElementById('testMessage').value;
+    
+    // Show loading state
+    button.disabled = true;
+    spinner.classList.remove('d-none');
+    resultDiv.classList.add('d-none');
+    errorDiv.classList.add('d-none');
+    
+    // Make request
+    fetch('{% url "llm:config-test" data.config.id %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: 'test_message=' + encodeURIComponent(message)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            responseDiv.textContent = data.response_text;
+            tokensSpan.textContent = data.tokens_used;
+            resultDiv.classList.remove('d-none');
+        } else {
+            errorDiv.textContent = data.error || 'Test failed';
+            errorDiv.classList.remove('d-none');
+        }
+    })
+    .catch(error => {
+        errorDiv.textContent = 'Network error: ' + error.message;
+        errorDiv.classList.remove('d-none');
+    })
+    .finally(() => {
+        button.disabled = false;
+        spinner.classList.add('d-none');
+    });
+});
+</script>
+{% endif %}
+{% endblock %}
+{% endblock %}
