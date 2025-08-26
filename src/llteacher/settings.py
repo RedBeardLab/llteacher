@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'llteacher',  # Main project app for management commands
     'accounts',
     'conversations',
     'homeworks',
