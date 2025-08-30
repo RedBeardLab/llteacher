@@ -35,6 +35,8 @@ class HomeworkListItem:
     created_at: Any  # datetime
     is_overdue: bool
     progress: Optional[List[Dict[str, Any]]] = None
+    completed_percentage: int = 0
+    in_progress_percentage: int = 0
 
 
 @dataclass
@@ -133,6 +135,14 @@ class HomeworkListView(View):
                         'conversation_id': section_progress.conversation_id
                     })
                 
+                # Calculate percentages directly in the view
+                total_sections = len(progress_data.sections_progress)
+                completed_sections = sum(1 for s in progress_data.sections_progress if s.status == 'submitted')
+                in_progress_sections = sum(1 for s in progress_data.sections_progress if s.status in ['in_progress', 'in_progress_overdue'])
+                
+                completed_percentage = round((completed_sections / total_sections) * 100) if total_sections > 0 else 0
+                in_progress_percentage = round((in_progress_sections / total_sections) * 100) if total_sections > 0 else 0
+                
                 homeworks.append(HomeworkListItem(
                     id=homework.id,
                     title=homework.title,
@@ -141,7 +151,9 @@ class HomeworkListView(View):
                     section_count=homework.section_count,
                     created_at=homework.created_at,
                     is_overdue=homework.is_overdue,
-                    progress=progress
+                    progress=progress,
+                    completed_percentage=completed_percentage,
+                    in_progress_percentage=in_progress_percentage
                 ))
                 
         else:

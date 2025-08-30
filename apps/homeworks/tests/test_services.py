@@ -196,8 +196,6 @@ class TestHomeworkServiceProgress(HomeworkServiceTestCase):
         
         # Check there are 2 sections in progress data
         self.assertEqual(len(progress_data.sections_progress), 2)
-        self.assertEqual(progress_data.total_sections, 2)
-        self.assertEqual(progress_data.completed_sections, 0)
         
         # All sections should be marked as not started
         for section_progress in progress_data.sections_progress:
@@ -219,14 +217,89 @@ class TestHomeworkServiceProgress(HomeworkServiceTestCase):
         
         # Should be called once per section
         self.assertEqual(mock_submission_filter.call_count, 2)
-        
-        # Check progress data reflects submissions
-        self.assertEqual(progress_data.completed_sections, 2)  # Both sections are submitted
-        
+                
         # Check status and conversation ID for each section
         for section_progress in progress_data.sections_progress:
             self.assertEqual(section_progress.status, 'submitted')
             self.assertIsNotNone(section_progress.conversation_id)
+
+    def test_get_progress_with_active_conversations(self):
+        """Test getting progress when student has active conversations (the fix)."""
+        from conversations.models import Conversation
+        
+        # Create a conversation for the first section (student started working)
+        conversation = Conversation.objects.create(
+            user=self.student_user,
+            section=self.sections[0]
+        )
+        
+        progress_data = HomeworkService.get_student_homework_progress(
+            self.student,
+            self.homework
+        )
+        
+        # Check progress data - should have 2 sections, none completed yet
+        self.assertEqual(len(progress_data.sections_progress), 2)
+        
+        # First section should be in progress
+        section1_progress = progress_data.sections_progress[0]
+        self.assertEqual(section1_progress.status, 'in_progress')
+        self.assertEqual(section1_progress.conversation_id, conversation.id)
+        
+        # Second section should still be not started
+        section2_progress = progress_data.sections_progress[1]
+        self.assertEqual(section2_progress.status, 'not_started')
+        self.assertIsNone(section2_progress.conversation_id)
+
+    def test_get_progress_overdue_with_conversations(self):
+        """Test progress tracking for overdue homework with active conversations."""
+        from conversations.models import Conversation
+        
+        # Make homework overdue
+        self.homework.due_date = timezone.now() - timedelta(days=1)
+        self.homework.save()
+        
+        # Create conversation for first section
+        conversation = Conversation.objects.create(
+            user=self.student_user,
+            section=self.sections[0]
+        )
+        
+        progress_data = HomeworkService.get_student_homework_progress(
+            self.student,
+            self.homework
+        )
+        
+        # First section should be in_progress_overdue (started but overdue)
+        section1_progress = progress_data.sections_progress[0]
+        self.assertEqual(section1_progress.status, 'in_progress_overdue')
+        self.assertEqual(section1_progress.conversation_id, conversation.id)
+        
+        # Second section should be overdue (never started and overdue)
+        section2_progress = progress_data.sections_progress[1]
+        self.assertEqual(section2_progress.status, 'overdue')
+        self.assertIsNone(section2_progress.conversation_id)
+
+    def test_get_progress_deleted_conversations_ignored(self):
+        """Test that soft-deleted conversations are ignored in progress tracking."""
+        from conversations.models import Conversation
+        
+        # Create a conversation and then soft delete it
+        conversation = Conversation.objects.create(
+            user=self.student_user,
+            section=self.sections[0]
+        )
+        conversation.soft_delete()
+        
+        progress_data = HomeworkService.get_student_homework_progress(
+            self.student,
+            self.homework
+        )
+        
+        # Should not detect the deleted conversation
+        section1_progress = progress_data.sections_progress[0]
+        self.assertEqual(section1_progress.status, 'not_started')
+        self.assertIsNone(section1_progress.conversation_id)
 
 
 class TestHomeworkServiceDetails(HomeworkServiceTestCase):

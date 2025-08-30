@@ -5,7 +5,7 @@ This module provides services for managing homework assignments and their sectio
 Following a testable-first approach with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import Any
 from uuid import UUID
 from django.db import transaction
 
@@ -15,22 +15,22 @@ class SectionCreateData:
     title: str
     content: str
     order: int
-    solution: Optional[str] = None
+    solution: str | None = None
 
 @dataclass
 class HomeworkCreateData:
     title: str
     description: str
     due_date: Any  # datetime
-    sections: List[SectionCreateData]
-    llm_config: Optional[UUID] = None
+    sections: list[SectionCreateData]
+    llm_config: UUID | None = None
 
 @dataclass
 class HomeworkCreateResult:
     homework_id: UUID
-    section_ids: List[UUID]
+    section_ids: list[UUID]
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 @dataclass
 class SectionProgressData:
@@ -38,18 +38,12 @@ class SectionProgressData:
     title: str
     order: int
     status: str  # 'not_started', 'in_progress', 'submitted', 'overdue'
-    conversation_id: Optional[UUID] = None
+    conversation_id: UUID | None = None
 
 @dataclass
 class HomeworkProgressData:
     homework_id: UUID
-    sections_progress: List[SectionProgressData]
-    completed_sections: int = 0
-    total_sections: int = 0
-    
-    def __post_init__(self):
-        self.total_sections = len(self.sections_progress)
-        self.completed_sections = sum(1 for s in self.sections_progress if s.status == 'submitted')
+    sections_progress: list[SectionProgressData]
 
 # Missing data contracts that need to be defined
 @dataclass
@@ -62,29 +56,29 @@ class HomeworkDetailData:
     created_by: UUID
     created_at: Any  # datetime
     updated_at: Any  # datetime
-    llm_config: Optional[UUID] = None
-    sections: List[Any] = None  # Will be defined with a proper type
+    llm_config: UUID | None = None
+    sections: list[Any] | None = None  # Will be defined with a proper type
 
 @dataclass
 class HomeworkUpdateData:
     """Data contract for updating homework"""
-    title: Optional[str] = None
-    description: Optional[str] = None
-    due_date: Optional[Any] = None  # datetime
-    llm_config: Optional[UUID] = None
-    sections_to_update: Optional[List[Any]] = None  # Will be defined with proper type
-    sections_to_create: Optional[List[SectionCreateData]] = None
-    sections_to_delete: Optional[List[UUID]] = None
+    title: str | None = None
+    description: str | None = None
+    due_date: Any | None = None  # datetime
+    llm_config: UUID | None = None
+    sections_to_update: list[Any] | None = None  # Will be defined with proper type
+    sections_to_create: list[SectionCreateData] | None = None
+    sections_to_delete: list[UUID] | None = None
 
 @dataclass
 class HomeworkUpdateResult:
     """Result of updating a homework assignment"""
     success: bool = True
-    error: Optional[str] = None
-    homework_id: Optional[UUID] = None
-    updated_section_ids: List[UUID] = None
-    created_section_ids: List[UUID] = None
-    deleted_section_ids: List[UUID] = None
+    error: str | None = None
+    homework_id: UUID | None = None
+    updated_section_ids: list[UUID] | None = None
+    created_section_ids: list[UUID] | None = None
+    deleted_section_ids: list[UUID] | None = None
 
 class HomeworkService:
     """
@@ -129,7 +123,7 @@ class HomeworkService:
                 )
                 
                 # Create sections
-                section_ids: List[UUID] = []
+                section_ids: list[UUID] = []
                 for section_data in data.sections:
                     # Create section
                     section = Section.objects.create(
@@ -175,10 +169,10 @@ class HomeworkService:
             HomeworkProgressData with progress information
         """
         # Import here to avoid circular imports
-        from conversations.models import Submission
+        from conversations.models import Submission, Conversation
         
         sections = homework.sections.order_by('order')
-        progress_items: List[SectionProgressData] = []
+        progress_items: list[SectionProgressData] = []
         
         for section in sections:
             try:
@@ -190,14 +184,28 @@ class HomeworkService:
                 
                 if submission:
                     status: str = 'submitted'
-                    conversation_id: Optional[UUID] = submission.conversation.id
+                    conversation_id: UUID | None = submission.conversation.id
                 else:
-                    # Check if due date has passed
-                    if homework.is_overdue:
-                        status = 'overdue'
-                        conversation_id = None
+                    # Check if student has started working (has conversations)
+                    conversation = Conversation.objects.filter(
+                        user=student.user,
+                        section=section,
+                        is_deleted=False
+                    ).first()
+                    
+                    if conversation:
+                        # Student has started working
+                        if homework.is_overdue:
+                            status = 'in_progress_overdue'  # Started but overdue
+                        else:
+                            status = 'in_progress'  # Started and on time
+                        conversation_id = conversation.id
                     else:
-                        status = 'not_started'
+                        # Student hasn't started
+                        if homework.is_overdue:
+                            status = 'overdue'  # Never started and overdue
+                        else:
+                            status = 'not_started'  # Never started, still time
                         conversation_id = None
             except Exception:
                 status = 'not_started'
@@ -219,7 +227,7 @@ class HomeworkService:
         )
     
     @staticmethod
-    def get_homework_with_sections(homework_id: UUID) -> Optional[HomeworkDetailData]:
+    def get_homework_with_sections(homework_id: UUID) -> HomeworkDetailData | None:
         """
         Get detailed homework data with all its sections.
         
