@@ -20,7 +20,7 @@ from django.contrib import messages
 from llteacher.permissions.decorators import teacher_required
 
 from .models import Homework, Section
-from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData
+from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData, SectionStatus
 from .forms import HomeworkForm, SectionForm, SectionFormSet
 
 
@@ -137,8 +137,8 @@ class HomeworkListView(View):
                 
                 # Calculate percentages directly in the view
                 total_sections = len(progress_data.sections_progress)
-                completed_sections = sum(1 for s in progress_data.sections_progress if s.status == 'submitted')
-                in_progress_sections = sum(1 for s in progress_data.sections_progress if s.status in ['in_progress', 'in_progress_overdue'])
+                completed_sections = sum(1 for s in progress_data.sections_progress if s.status == SectionStatus.SUBMITTED)
+                in_progress_sections = sum(1 for s in progress_data.sections_progress if s.status in [SectionStatus.IN_PROGRESS, SectionStatus.IN_PROGRESS_OVERDUE])
                 
                 completed_percentage = round((completed_sections / total_sections) * 100) if total_sections > 0 else 0
                 in_progress_percentage = round((in_progress_sections / total_sections) * 100) if total_sections > 0 else 0

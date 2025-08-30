@@ -20,7 +20,8 @@ from homeworks.services import (
     HomeworkCreateResult,
     HomeworkProgressData,
     HomeworkDetailData,
-    HomeworkUpdateData
+    HomeworkUpdateData,
+    SectionStatus
 )
 from accounts.models import Teacher, Student
 
@@ -199,7 +200,7 @@ class TestHomeworkServiceProgress(HomeworkServiceTestCase):
         
         # All sections should be marked as not started
         for section_progress in progress_data.sections_progress:
-            self.assertEqual(section_progress.status, 'not_started')
+            self.assertEqual(section_progress.status, SectionStatus.NOT_STARTED)
             self.assertIsNone(section_progress.conversation_id)
 
     @patch('conversations.models.Submission.objects.filter')
@@ -220,7 +221,7 @@ class TestHomeworkServiceProgress(HomeworkServiceTestCase):
                 
         # Check status and conversation ID for each section
         for section_progress in progress_data.sections_progress:
-            self.assertEqual(section_progress.status, 'submitted')
+            self.assertEqual(section_progress.status, SectionStatus.SUBMITTED)
             self.assertIsNotNone(section_progress.conversation_id)
 
     def test_get_progress_with_active_conversations(self):
@@ -243,12 +244,12 @@ class TestHomeworkServiceProgress(HomeworkServiceTestCase):
         
         # First section should be in progress
         section1_progress = progress_data.sections_progress[0]
-        self.assertEqual(section1_progress.status, 'in_progress')
+        self.assertEqual(section1_progress.status, SectionStatus.IN_PROGRESS)
         self.assertEqual(section1_progress.conversation_id, conversation.id)
         
         # Second section should still be not started
         section2_progress = progress_data.sections_progress[1]
-        self.assertEqual(section2_progress.status, 'not_started')
+        self.assertEqual(section2_progress.status, SectionStatus.NOT_STARTED)
         self.assertIsNone(section2_progress.conversation_id)
 
     def test_get_progress_overdue_with_conversations(self):
@@ -272,12 +273,12 @@ class TestHomeworkServiceProgress(HomeworkServiceTestCase):
         
         # First section should be in_progress_overdue (started but overdue)
         section1_progress = progress_data.sections_progress[0]
-        self.assertEqual(section1_progress.status, 'in_progress_overdue')
+        self.assertEqual(section1_progress.status, SectionStatus.IN_PROGRESS_OVERDUE)
         self.assertEqual(section1_progress.conversation_id, conversation.id)
         
         # Second section should be overdue (never started and overdue)
         section2_progress = progress_data.sections_progress[1]
-        self.assertEqual(section2_progress.status, 'overdue')
+        self.assertEqual(section2_progress.status, SectionStatus.OVERDUE)
         self.assertIsNone(section2_progress.conversation_id)
 
     def test_get_progress_deleted_conversations_ignored(self):
@@ -298,7 +299,7 @@ class TestHomeworkServiceProgress(HomeworkServiceTestCase):
         
         # Should not detect the deleted conversation
         section1_progress = progress_data.sections_progress[0]
-        self.assertEqual(section1_progress.status, 'not_started')
+        self.assertEqual(section1_progress.status, SectionStatus.NOT_STARTED)
         self.assertIsNone(section1_progress.conversation_id)
 
 
@@ -322,12 +323,14 @@ class TestHomeworkServiceDetails(HomeworkServiceTestCase):
         
         # Check result is correct type
         self.assertIsInstance(detail_data, HomeworkDetailData)
+        assert detail_data is not None
         self.assertEqual(detail_data.id, self.homework_id)
         self.assertEqual(detail_data.title, self.homework_data.title)
         self.assertEqual(detail_data.description, self.homework_data.description)
         
         # Check sections data
         self.assertEqual(len(detail_data.sections), 2)
+        assert detail_data.sections is not None
         self.assertEqual(detail_data.sections[0]['title'], self.section1.title)
         self.assertEqual(detail_data.sections[1]['title'], self.section2.title)
 

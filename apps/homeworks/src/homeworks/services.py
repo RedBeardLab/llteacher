@@ -7,7 +7,17 @@ Following a testable-first approach with typed data contracts.
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
+from enum import Enum
 from django.db import transaction
+
+
+class SectionStatus(str, Enum):
+    """Enumeration of possible section status values."""
+    NOT_STARTED = 'not_started'
+    IN_PROGRESS = 'in_progress'
+    IN_PROGRESS_OVERDUE = 'in_progress_overdue'
+    SUBMITTED = 'submitted'
+    OVERDUE = 'overdue'
 
 # Data Contracts
 @dataclass
@@ -37,7 +47,7 @@ class SectionProgressData:
     section_id: UUID
     title: str
     order: int
-    status: str  # 'not_started', 'in_progress', 'submitted', 'overdue'
+    status: SectionStatus
     conversation_id: UUID | None = None
 
 @dataclass
@@ -183,7 +193,7 @@ class HomeworkService:
                 ).first()
                 
                 if submission:
-                    status: str = 'submitted'
+                    status: SectionStatus = SectionStatus.SUBMITTED
                     conversation_id: UUID | None = submission.conversation.id
                 else:
                     # Check if student has started working (has conversations)
@@ -196,19 +206,19 @@ class HomeworkService:
                     if conversation:
                         # Student has started working
                         if homework.is_overdue:
-                            status = 'in_progress_overdue'  # Started but overdue
+                            status = SectionStatus.IN_PROGRESS_OVERDUE  # Started but overdue
                         else:
-                            status = 'in_progress'  # Started and on time
+                            status = SectionStatus.IN_PROGRESS  # Started and on time
                         conversation_id = conversation.id
                     else:
                         # Student hasn't started
                         if homework.is_overdue:
-                            status = 'overdue'  # Never started and overdue
+                            status = SectionStatus.OVERDUE  # Never started and overdue
                         else:
-                            status = 'not_started'  # Never started, still time
+                            status = SectionStatus.NOT_STARTED  # Never started, still time
                         conversation_id = None
             except Exception:
-                status = 'not_started'
+                status = SectionStatus.NOT_STARTED
                 conversation_id = None
             
             # Create progress data for this section
