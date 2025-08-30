@@ -10,11 +10,15 @@ from uuid import UUID
 from datetime import datetime
 
 from django.views import View
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, Http404
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, Http404, JsonResponse, StreamingHttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+import json
+import time
 
 from homeworks.models import Section
 from .models import Conversation, Submission
@@ -26,7 +30,7 @@ class ConversationStartFormData:
     """Data structure for the conversation start form view."""
     section_id: UUID
     section_title: str
-    errors: Dict[str, str] = None
+    errors: Optional[Dict[str, str]] = None
 
 
 @dataclass
@@ -70,7 +74,7 @@ class MessageSendFormData:
     conversation_id: UUID
     content: str
     message_type: str = 'student'
-    errors: Dict[str, str] = None
+    errors: Optional[Dict[str, str]] = None
 
 
 @dataclass
@@ -85,8 +89,8 @@ class MessageSendResult:
 class SectionSubmitFormData:
     """Data structure for the section submit form."""
     section_id: UUID
-    conversation_id: UUID
-    errors: Dict[str, str] = None
+    conversation_id: Optional[UUID]
+    errors: Optional[Dict[str, str]] = None
 
 
 @dataclass
@@ -495,3 +499,182 @@ class SectionSubmitView(View):
             conversation_id=conversation_id,
             errors=errors if errors else None
         )
+
+
+# Simple API Views for Real-time Chat
+
+class MessageSendAPIView(View):
+    """Simple API view for sending messages via AJAX."""
+    
+    @method_decorator(login_required)
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+    
+    def post(self, request: HttpRequest, conversation_id: UUID) -> JsonResponse:
+        """Handle AJAX POST requests to send a message."""
+        try:
+            # Parse JSON data
+            data = json.loads(request.body)
+            content = data.get('content', '').strip()
+            message_type = data.get('message_type', 'student')
+            
+            # Validate input
+            if not content:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Message content is required.'
+                }, status=400)
+            
+            # Get conversation and check permissions
+            conversation = get_object_or_404(Conversation, id=conversation_id)
+            if conversation.user != request.user:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'You can only send messages in your own conversations.'
+                }, status=403)
+            
+            # Send message using existing service
+            result = ConversationService.send_message(conversation, content, message_type)
+            
+            if result.success:
+                return JsonResponse({
+                    'success': True,
+                    'user_message_id': str(result.user_message_id),
+                    'ai_message_id': str(result.ai_message_id),
+                    'ai_response': result.ai_response
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': result.error or 'Failed to send message.'
+                }, status=500)
+                
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Invalid JSON data.'}, status=400)
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+class MessagesAPIView(View):
+    """Simple API view for getting conversation messages."""
+    
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+    
+    def get(self, request: HttpRequest, conversation_id: UUID) -> JsonResponse:
+        """Get messages for a conversation."""
+        try:
+            # Get conversation data using existing service
+            conversation_data = ConversationService.get_conversation_data(conversation_id)
+            
+            if not conversation_data:
+                return JsonResponse({'success': False, 'error': 'Conversation not found.'}, status=404)
+            
+            # Simple permission check
+            if str(request.user.id) != str(conversation_data.user_id):
+                return JsonResponse({'success': False, 'error': 'Permission denied.'}, status=403)
+            
+            # Serialize messages
+            messages = []
+            if conversation_data.messages:
+                for msg in conversation_data.messages:
+                    messages.append({
+                        'id': str(msg.id),
+                        'content': msg.content,
+                        'message_type': msg.message_type,
+                        'timestamp': msg.timestamp.isoformat(),
+                        'is_from_student': msg.is_from_student,
+                        'is_from_ai': msg.is_from_ai,
+                        'is_system_message': msg.is_system_message
+                    })
+            
+            return JsonResponse({
+                'success': True,
+                'messages': messages,
+                'conversation_id': str(conversation_data.id)
+            })
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+class ConversationStreamView(View):
+    """Server-Sent Events view for streaming LLM responses."""
+    
+    @method_decorator(login_required)
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+    
+    def post(self, request: HttpRequest, conversation_id: UUID) -> StreamingHttpResponse:
+        """Stream LLM response via Server-Sent Events."""
+        
+        # this stream function does too much parsing, and authz and getting the message
+        # can happen outside
+        def stream_llm_response():
+            try:
+                # Parse JSON data
+                data = json.loads(request.body)
+                content = data.get('content', '').strip()
+                message_type = data.get('message_type', 'student')
+                
+                # Validate input
+                if not content:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Message content is required.'})}\n\n".encode('utf-8')
+                    return
+                
+                # Get conversation and check permissions
+                conversation = get_object_or_404(Conversation, id=conversation_id)
+                if conversation.user != request.user:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Permission denied.'})}\n\n".encode('utf-8')
+                    return
+                
+                # Create user message first
+                from .models import Message
+                user_message = Message.objects.create(
+                    conversation=conversation,
+                    content=content,
+                    message_type=message_type
+                )
+                
+                # Send user message confirmation
+                yield f"data: {json.dumps({'type': 'user_message', 'message_id': str(user_message.id), 'content': content})}\n\n".encode('utf-8')
+                
+                # Create AI message placeholder
+                ai_message = Message.objects.create(
+                    conversation=conversation,
+                    content="",
+                    message_type='ai'
+                )
+                
+                # Send AI message start
+                yield f"data: {json.dumps({'type': 'ai_message_start', 'message_id': str(ai_message.id)})}\n\n".encode('utf-8')
+                
+                # Stream LLM response
+                from llm.services import LLMService
+                full_response = ""
+                
+                for token in LLMService.stream_response(conversation, content, message_type):
+                    full_response += token
+                    
+                    # Update AI message in database
+                    ai_message.content = full_response
+                    ai_message.save()
+                    
+                    # Send token via SSE
+                    yield f"data: {json.dumps({'type': 'ai_token', 'message_id': str(ai_message.id), 'token': token, 'content': full_response})}\n\n".encode('utf-8')
+                
+                # Send completion signal
+                yield f"data: {json.dumps({'type': 'ai_message_complete', 'message_id': str(ai_message.id), 'final_content': full_response})}\n\n".encode('utf-8')
+                
+            except json.JSONDecodeError:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Invalid JSON data.'})}\n\n".encode('utf-8')
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n".encode('utf-8')
+        
+        response = StreamingHttpResponse(stream_llm_response(), content_type='text/event-stream')
+        response['Cache-Control'] = 'no-cache'
+        response['Access-Control-Allow-Origin'] = '*'
+        return response

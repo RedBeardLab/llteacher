@@ -168,5 +168,360 @@
         overflow-x: auto;
         color: #212529;
     }
+    
+    /* Real-time chat enhancements */
+    .typing-indicator {
+        display: none;
+        padding: 0.5rem;
+        font-style: italic;
+        color: #6c757d;
+    }
+    
+    .typing-indicator.show {
+        display: block;
+    }
+    
+    .message-sending {
+        opacity: 0.7;
+    }
+    
+    .ai-message-streaming .message-content {
+        position: relative;
+    }
+    
+    .streaming-cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1.2em;
+        background-color: #4caf50;
+        animation: blink 1s infinite;
+        margin-left: 2px;
+    }
+    
+    @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+    }
+    
+    .send-button-loading {
+        position: relative;
+    }
+    
+    .send-button-loading::after {
+        content: '';
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        margin: auto;
+        border: 2px solid transparent;
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
 </style>
+
+<!-- Real-time Chat JavaScript -->
+<script>
+class RealTimeChatClient {
+    constructor(conversationId) {
+        this.conversationId = conversationId;
+        this.eventSource = null;
+        this.isStreaming = false;
+        this.currentStreamingMessage = null;
+        
+        this.initializeElements();
+        this.bindEvents();
+    }
+    
+    initializeElements() {
+        this.form = document.getElementById('message-form');
+        this.textarea = document.getElementById('content');
+        this.sendButton = this.form.querySelector('button[type="submit"]');
+        this.messageTypeSelect = document.getElementById('message_type');
+        this.conversationContainer = document.querySelector('.conversation-container');
+        
+        // Create typing indicator
+        this.typingIndicator = document.createElement('div');
+        this.typingIndicator.className = 'typing-indicator';
+        this.typingIndicator.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> AI is thinking...';
+        this.conversationContainer.appendChild(this.typingIndicator);
+    }
+    
+    bindEvents() {
+        // Override form submission
+        this.form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.sendMessage();
+        });
+        
+        // Auto-resize textarea
+        this.textarea.addEventListener('input', () => {
+            this.textarea.style.height = 'auto';
+            this.textarea.style.height = this.textarea.scrollHeight + 'px';
+        });
+    }
+    
+    async sendMessage() {
+        const content = this.textarea.value.trim();
+        const messageType = this.messageTypeSelect.value;
+        
+        if (!content || this.isStreaming) {
+            return;
+        }
+        
+        // Disable form and show loading state
+        this.setLoadingState(true);
+        
+        try {
+            // Start streaming connection
+            await this.startStreaming(content, messageType);
+            
+            // Clear form
+            this.textarea.value = '';
+            this.textarea.style.height = 'auto';
+            
+        } catch (error) {
+            console.error('Error sending message:', error);
+            this.showError('Failed to send message. Please try again.');
+            this.setLoadingState(false);
+        }
+    }
+    
+    async startStreaming(content, messageType) {
+        return new Promise((resolve, reject) => {
+            this.isStreaming = true;
+            this.showTypingIndicator(true);
+            
+            // Create EventSource for streaming
+            const streamUrl = `/conversations/api/${this.conversationId}/stream/`;
+            
+            // Use fetch to POST data and get streaming response
+            fetch(streamUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                },
+                body: JSON.stringify({
+                    content: content,
+                    message_type: messageType
+                })
+            }).then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                const processStream = () => {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            this.handleStreamComplete();
+                            resolve();
+                            return;
+                        }
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    this.handleStreamEvent(data);
+                                } catch (e) {
+                                    console.error('Error parsing SSE data:', e);
+                                }
+                            }
+                        }
+                        
+                        processStream();
+                    }).catch(reject);
+                };
+                
+                processStream();
+            }).catch(reject);
+        });
+    }
+    
+    handleStreamEvent(data) {
+        switch (data.type) {
+            case 'user_message':
+                this.addUserMessage(data.content, data.message_id);
+                break;
+                
+            case 'ai_message_start':
+                this.showTypingIndicator(false);
+                this.startAIMessage(data.message_id);
+                break;
+                
+            case 'ai_token':
+                this.appendAIToken(data.token, data.message_id);
+                break;
+                
+            case 'ai_message_complete':
+                this.completeAIMessage(data.message_id, data.final_content);
+                break;
+                
+            case 'error':
+                this.showError(data.message);
+                this.handleStreamComplete();
+                break;
+        }
+    }
+    
+    addUserMessage(content, messageId) {
+        const messageHtml = `
+            <div class="message-container message-student mb-3" data-message-id="${messageId}">
+                <div class="message-header">
+                    <span class="badge bg-primary">Student</span>
+                    <small class="text-muted">${this.formatTimestamp(new Date())}</small>
+                </div>
+                <div class="message-content p-3 rounded">
+                    <p>${this.escapeHtml(content).replace(/\n/g, '<br>')}</p>
+                </div>
+            </div>
+        `;
+        
+        this.typingIndicator.insertAdjacentHTML('beforebegin', messageHtml);
+        this.scrollToBottom();
+    }
+    
+    startAIMessage(messageId) {
+        const messageHtml = `
+            <div class="message-container message-ai ai-message-streaming mb-3" data-message-id="${messageId}">
+                <div class="message-header">
+                    <span class="badge bg-success">AI Tutor</span>
+                    <small class="text-muted">${this.formatTimestamp(new Date())}</small>
+                </div>
+                <div class="message-content p-3 rounded">
+                    <p><span class="streaming-cursor"></span></p>
+                </div>
+            </div>
+        `;
+        
+        this.typingIndicator.insertAdjacentHTML('beforebegin', messageHtml);
+        this.currentStreamingMessage = document.querySelector(`[data-message-id="${messageId}"]`);
+        this.scrollToBottom();
+    }
+    
+    appendAIToken(token, messageId) {
+        if (this.currentStreamingMessage) {
+            const contentP = this.currentStreamingMessage.querySelector('.message-content p');
+            const cursor = contentP.querySelector('.streaming-cursor');
+            
+            // Insert token before cursor
+            const tokenSpan = document.createElement('span');
+            tokenSpan.textContent = token;
+            cursor.parentNode.insertBefore(tokenSpan, cursor);
+            
+            this.scrollToBottom();
+        }
+    }
+    
+    completeAIMessage(messageId, finalContent) {
+        if (this.currentStreamingMessage) {
+            // Remove streaming class and cursor
+            this.currentStreamingMessage.classList.remove('ai-message-streaming');
+            const contentP = this.currentStreamingMessage.querySelector('.message-content p');
+            const cursor = contentP.querySelector('.streaming-cursor');
+            if (cursor) {
+                cursor.remove();
+            }
+            
+            // Set final content (in case of any discrepancies)
+            contentP.innerHTML = this.escapeHtml(finalContent).replace(/\n/g, '<br>');
+            
+            this.currentStreamingMessage = null;
+        }
+    }
+    
+    handleStreamComplete() {
+        this.isStreaming = false;
+        this.showTypingIndicator(false);
+        this.setLoadingState(false);
+        this.currentStreamingMessage = null;
+    }
+    
+    showTypingIndicator(show) {
+        if (show) {
+            this.typingIndicator.classList.add('show');
+        } else {
+            this.typingIndicator.classList.remove('show');
+        }
+        this.scrollToBottom();
+    }
+    
+    setLoadingState(loading) {
+        this.sendButton.disabled = loading;
+        this.textarea.disabled = loading;
+        this.messageTypeSelect.disabled = loading;
+        
+        if (loading) {
+            this.sendButton.classList.add('send-button-loading');
+            this.sendButton.textContent = 'Sending...';
+        } else {
+            this.sendButton.classList.remove('send-button-loading');
+            this.sendButton.textContent = 'Send Message';
+        }
+    }
+    
+    showError(message) {
+        const errorHtml = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-triangle"></i> ${this.escapeHtml(message)}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        
+        this.form.insertAdjacentHTML('beforebegin', errorHtml);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            const alert = this.form.previousElementSibling;
+            if (alert && alert.classList.contains('alert')) {
+                alert.remove();
+            }
+        }, 5000);
+    }
+    
+    scrollToBottom() {
+        setTimeout(() => {
+            this.conversationContainer.scrollTop = this.conversationContainer.scrollHeight;
+        }, 10);
+    }
+    
+    formatTimestamp(date) {
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    getCSRFToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    }
+}
+
+// Initialize chat client when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    const conversationId = '{{ conversation_data.id }}';
+    window.chatClient = new RealTimeChatClient(conversationId);
+});
+</script>
 {% endblock %}
