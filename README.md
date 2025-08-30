@@ -50,13 +50,13 @@ The project includes comprehensive testing with **149 test cases** covering all 
 
 ```bash
 # Run all tests (fastest - uses in-memory database)
-python run_tests.py
+uv run python run_tests.py
 
 # Run with verbose output
-python run_tests.py --verbosity=2
+uv run python run_tests.py --verbosity=2
 
 # Run specific app tests
-python run_tests.py apps.accounts.tests
+uv run python run_tests.py apps.accounts.tests
 ```
 
 ### Performance
