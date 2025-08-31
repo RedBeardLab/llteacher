@@ -85,21 +85,6 @@ class MessageSendResult:
     error: Optional[str] = None
 
 
-@dataclass
-class SectionSubmitFormData:
-    """Data structure for the section submit form."""
-    section_id: UUID
-    conversation_id: Optional[UUID]
-    errors: Optional[Dict[str, str]] = None
-
-
-@dataclass
-class SectionSubmitViewData:
-    """Data structure for rendering the section submit view."""
-    section_id: UUID
-    section_title: str
-    conversations: List[Dict[str, Any]]
-    existing_submission: Optional[Dict[str, Any]] = None
 
 
 class ConversationStartView(View):
@@ -323,184 +308,6 @@ class MessageSendView(View):
         )
 
 
-class SectionSubmitView(View):
-    """View for submitting completed sections."""
-    
-    @method_decorator(login_required)
-    def dispatch(self, *args, **kwargs):
-        """Ensure user is logged in before accessing view."""
-        return super().dispatch(*args, **kwargs)
-    
-    def get(self, request: HttpRequest, section_id: UUID) -> HttpResponse:
-        """Handle GET requests to display the section submit form."""
-        # Get the section (404 if not found)
-        section = get_object_or_404(Section.objects.select_related('homework'), id=section_id)
-        
-        # Check if user is a student
-        if not hasattr(request.user, 'student_profile'):
-            return HttpResponseForbidden("Only students can submit sections.")
-        
-        # Get view data
-        view_data = self._get_view_data(request.user, section)
-        
-        # Render the form
-        return render(request, 'conversations/submit.html', {
-            'view_data': view_data
-        })
-    
-    def post(self, request: HttpRequest, section_id: UUID) -> HttpResponse:
-        """Handle POST requests to submit a section."""
-        # Get the section (404 if not found)
-        section = get_object_or_404(Section.objects.select_related('homework'), id=section_id)
-        
-        # Check if user is a student
-        if not hasattr(request.user, 'student_profile'):
-            return HttpResponseForbidden("Only students can submit sections.")
-        
-        # Parse and validate form data
-        form_data = self._parse_form_data(request.POST, section_id)
-        
-        # Check for validation errors
-        if form_data.errors:
-            messages.error(request, "There were errors in your submission.")
-            view_data = self._get_view_data(request.user, section)
-            return render(request, 'conversations/submit.html', {
-                'view_data': view_data,
-                'form_data': form_data
-            })
-        
-        # Get the conversation
-        try:
-            conversation = Conversation.objects.get(
-                id=form_data.conversation_id, 
-                user=request.user,
-                section=section
-            )
-        except Conversation.DoesNotExist:
-            # Handle invalid conversation ID
-            if not form_data.errors:
-                form_data.errors = {}
-            form_data.errors['conversation_id'] = "Invalid conversation selected."
-            messages.error(request, "Invalid conversation selected.")
-            view_data = self._get_view_data(request.user, section)
-            return render(request, 'conversations/submit.html', {
-                'view_data': view_data,
-                'form_data': form_data
-            })
-        
-        # Submit section using service
-        result = SubmissionService.submit_section(request.user, conversation)
-        
-        if result.success:
-            # Redirect to section detail with success message
-            messages.success(
-                request, 
-                f"Section '{section.title}' submitted successfully." +
-                (" (Updated existing submission)" if not result.is_new else "")
-            )
-            return redirect('homeworks:section_detail', 
-                            homework_id=section.homework.id, 
-                            section_id=section.id)
-        else:
-            # Show error message
-            messages.error(request, result.error or "Failed to submit section.")
-            
-            # Update form data with error
-            if not form_data.errors:
-                form_data.errors = {}
-            form_data.errors['service'] = result.error or "Failed to submit section."
-            
-            # Re-render the form with errors
-            view_data = self._get_view_data(request.user, section)
-            return render(request, 'conversations/submit.html', {
-                'view_data': view_data,
-                'form_data': form_data
-            })
-    
-    def _get_view_data(self, user, section: Section) -> SectionSubmitViewData:
-        """
-        Prepare data for rendering the section submit form.
-        
-        Args:
-            user: The current user
-            section: Section object
-            
-        Returns:
-            SectionSubmitViewData with section and conversations
-        """
-        # Get all conversations for this user and section
-        conversations = Conversation.objects.filter(
-            user=user,
-            section=section,
-            is_deleted=False
-        ).order_by('-created_at')
-        
-        # Convert conversations to dictionary format
-        conversation_data = []
-        for conv in conversations:
-            message_count = conv.messages.count()
-            conversation_data.append({
-                'id': conv.id,
-                'created_at': conv.created_at,
-                'updated_at': conv.updated_at,
-                'message_count': message_count,
-                'last_activity': conv.updated_at or conv.created_at
-            })
-        
-        # Check if user already has a submission for this section
-        existing_submission = None
-        try:
-            submission = Submission.objects.get(
-                conversation__user=user,
-                conversation__section=section
-            )
-            existing_submission = {
-                'id': submission.id,
-                'conversation_id': submission.conversation.id,
-                'submitted_at': submission.submitted_at
-            }
-        except Submission.DoesNotExist:
-            pass
-        
-        # Create and return view data
-        return SectionSubmitViewData(
-            section_id=section.id,
-            section_title=section.title,
-            conversations=conversation_data,
-            existing_submission=existing_submission
-        )
-    
-    def _parse_form_data(self, post_data, section_id: UUID) -> SectionSubmitFormData:
-        """
-        Parse and validate form data.
-        
-        Args:
-            post_data: POST data from request
-            section_id: UUID of the section
-            
-        Returns:
-            SectionSubmitFormData with validated data or errors
-        """
-        # Initialize errors dict
-        errors = {}
-        
-        # Get and validate conversation ID
-        conversation_id_str = post_data.get('conversation_id', '').strip()
-        
-        try:
-            conversation_id = UUID(conversation_id_str)
-        except (ValueError, AttributeError):
-            conversation_id = None
-            errors['conversation_id'] = "Please select a conversation to submit."
-        
-        # Create and return form data
-        return SectionSubmitFormData(
-            section_id=section_id,
-            conversation_id=conversation_id,
-            errors=errors if errors else None
-        )
-
-
 # Simple API Views for Real-time Chat
 
 class MessageSendAPIView(View):
@@ -678,6 +485,51 @@ class ConversationStreamView(View):
         response['Cache-Control'] = 'no-cache'
         response['Access-Control-Allow-Origin'] = '*'
         return response
+
+
+class ConversationSubmitView(View):
+    """View for directly submitting a conversation."""
+    
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        """Ensure user is logged in before accessing view."""
+        return super().dispatch(*args, **kwargs)
+    
+    def post(self, request: HttpRequest, conversation_id: UUID) -> HttpResponse:
+        """Handle POST requests to submit the current conversation."""
+        # Get the conversation and check permissions
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+        
+        # Check if user owns this conversation
+        if conversation.user != request.user:
+            return HttpResponseForbidden("You can only submit your own conversations.")
+        
+        # Check if user is a student
+        if not hasattr(request.user, 'student_profile'):
+            return HttpResponseForbidden("Only students can submit conversations.")
+        
+        # Check if conversation is not deleted
+        if conversation.is_deleted:
+            messages.error(request, "Cannot submit a deleted conversation.")
+            return redirect('conversations:detail', conversation_id=conversation_id)
+        
+        # Submit the conversation using service
+        result = SubmissionService.submit_section(request.user, conversation)
+        
+        if result.success:
+            # Redirect to section detail with success message
+            messages.success(
+                request, 
+                f"Conversation submitted successfully for section '{conversation.section.title}'." +
+                (" (Updated existing submission)" if not result.is_new else "")
+            )
+            return redirect('homeworks:section_detail', 
+                            homework_id=conversation.section.homework.id, 
+                            section_id=conversation.section.id)
+        else:
+            # Show error message and redirect back to conversation
+            messages.error(request, result.error or "Failed to submit conversation.")
+            return redirect('conversations:detail', conversation_id=conversation_id)
 
 
 class ConversationDeleteAndRestartView(View):

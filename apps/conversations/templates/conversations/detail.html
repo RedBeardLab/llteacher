@@ -31,9 +31,12 @@
                             </button>
                         </form>
                         {% if conversation_data.can_submit %}
-                        <a href="{% url 'conversations:submit_section' section_id=conversation_data.section_id %}" class="btn btn-success">
-                            <i class="bi bi-check-circle"></i> Submit this section
-                        </a>
+                        <form method="post" action="{% url 'conversations:submit_conversation' conversation_id=conversation_data.id %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success" onclick="return confirm('Are you sure you want to submit this conversation for section \'{{ conversation_data.section_title }}\'?')">
+                                <i class="bi bi-check-circle"></i> Submit Conversation
+                            </button>
+                        </form>
                         {% endif %}
                     </div>
                     {% endif %}
