@@ -44,29 +44,28 @@ class HomeworkCreateResult:
     error: str | None = None
 
 @dataclass
-class SectionProgressData:
-    section_id: UUID
-    title: str
-    order: int
-    status: SectionStatus
-    conversation_id: UUID | None = None
-
-@dataclass
-class HomeworkProgressData:
-    homework_id: UUID
-    sections_progress: list[SectionProgressData]
-
-@dataclass
-class SectionDetailData:
-    """Data contract for detailed section information"""
+class SectionData:
+    """Unified data structure for section information used across services and views."""
     id: UUID
     title: str
     content: str
     order: int
-    has_solution: bool
     solution_content: str | None
     created_at: datetime
     updated_at: datetime
+    # Progress tracking fields (available when progress is calculated)
+    status: SectionStatus | None = None
+    conversation_id: UUID | None = None
+    
+    @property
+    def has_solution(self) -> bool:
+        """Check if section has a solution."""
+        return self.solution_content is not None
+
+@dataclass
+class HomeworkProgressData:
+    homework_id: UUID
+    sections_progress: list[SectionData]
 
 # Missing data contracts that need to be defined
 @dataclass
@@ -80,7 +79,7 @@ class HomeworkDetailData:
     created_at: datetime
     updated_at: datetime
     llm_config: UUID | None = None
-    sections: list[SectionDetailData] | None = None
+    sections: list[SectionData] | None = None
 
 @dataclass
 class HomeworkUpdateData:
@@ -194,8 +193,8 @@ class HomeworkService:
         # Import here to avoid circular imports
         from conversations.models import Submission, Conversation
         
-        sections = homework.sections.order_by('order')
-        progress_items: list[SectionProgressData] = []
+        sections = homework.sections.select_related('solution').order_by('order')
+        progress_items: list[SectionData] = []
         
         for section in sections:
             try:
@@ -235,11 +234,15 @@ class HomeworkService:
                 status = SectionStatus.NOT_STARTED
                 conversation_id = None
             
-            # Create progress data for this section
-            progress_items.append(SectionProgressData(
-                section_id=section.id,
+            # Create progress data for this section with complete section information
+            progress_items.append(SectionData(
+                id=section.id,
                 title=section.title,
+                content=section.content,
                 order=section.order,
+                solution_content=section.solution.content if section.solution else None,
+                created_at=section.created_at,
+                updated_at=section.updated_at,
                 status=status,
                 conversation_id=conversation_id
             ))
@@ -273,14 +276,13 @@ class HomeworkService:
             ).get(id=homework_id)
             
             # Prepare sections data
-            sections: List[SectionDetailData] = []
+            sections: List[SectionData] = []
             for section in homework.sections.order_by('order'):
-                section_data = SectionDetailData(
+                section_data = SectionData(
                     id=section.id,
                     title=section.title,
                     content=section.content,
                     order=section.order,
-                    has_solution=section.solution is not None,
                     solution_content=section.solution.content if section.solution else None,
                     created_at=section.created_at,
                     updated_at=section.updated_at

@@ -20,22 +20,8 @@ from django.contrib import messages
 from llteacher.permissions.decorators import teacher_required
 
 from .models import Homework, Section
-from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData, SectionStatus
+from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData, SectionStatus, SectionData
 from .forms import HomeworkForm, SectionForm, SectionFormSet
-
-
-@dataclass
-class SectionData:
-    """Unified data structure for section information used in both list and detail views."""
-    id: UUID
-    title: str
-    order: int
-    status: str | None = None
-    conversation_id: UUID | None = None
-    # Optional fields for detail view
-    content: str | None = None
-    has_solution: bool = False
-    solution_content: str | None = None
 
 
 @dataclass
@@ -142,9 +128,13 @@ class HomeworkListView(View):
                 sections = []
                 for section_progress in progress_data.sections_progress:
                     sections.append(SectionData(
-                        id=section_progress.section_id,
+                        id=section_progress.id,
                         title=section_progress.title,
+                        content=section_progress.content,
                         order=section_progress.order,
+                        solution_content=section_progress.solution_content,
+                        created_at=section_progress.created_at,
+                        updated_at=section_progress.updated_at,
                         status=section_progress.status,
                         conversation_id=section_progress.conversation_id
                     ))
@@ -578,24 +568,26 @@ class HomeworkDetailView(View):
                 progress_data = HomeworkService.get_student_homework_progress(student_profile, homework_obj)
                 # Create a map of section_id -> progress data for easy lookup
                 for progress in progress_data.sections_progress:
-                    section_progress_map[progress.section_id] = progress
+                    section_progress_map[progress.id] = progress
             except Homework.DoesNotExist:
                 pass
         
-        for section_data in homework_detail.sections:
-            # Get progress data for this section if available
-            progress = section_progress_map.get(section_data.id)
-            
-            sections.append(SectionData(
-                id=section_data.id,
-                title=section_data.title,
-                order=section_data.order,
-                status=progress.status if progress else None,
-                conversation_id=progress.conversation_id if progress else None,
-                content=section_data.content,
-                has_solution=section_data.has_solution,
-                solution_content=section_data.solution_content
-            ))
+        if homework_detail.sections:
+            for section_data in homework_detail.sections:
+                # Get progress data for this section if available
+                progress = section_progress_map.get(section_data.id)
+                
+                sections.append(SectionData(
+                    id=section_data.id,
+                    title=section_data.title,
+                    content=section_data.content,
+                    order=section_data.order,
+                    solution_content=section_data.solution_content,
+                    created_at=section_data.created_at,
+                    updated_at=section_data.updated_at,
+                    status=progress.status if progress else None,
+                    conversation_id=progress.conversation_id if progress else None
+                ))
         
         # Get teacher name
         from accounts.models import Teacher
