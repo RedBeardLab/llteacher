@@ -11,7 +11,6 @@ from homeworks.models import Homework, Section
 from conversations.models import Conversation, Submission
 from homeworks.views import HomeworkListView
 from homeworks.services import HomeworkService, SectionStatus
-from llm.models import LLMConfig
 
 User = get_user_model()
 

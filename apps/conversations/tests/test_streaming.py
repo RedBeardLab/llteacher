@@ -7,7 +7,7 @@ import json
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from homeworks.models import Homework, Section
 from conversations.models import Conversation, Message

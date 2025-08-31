@@ -5,7 +5,7 @@ This module provides services for managing homework assignments and their sectio
 Following a testable-first approach with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import Any, List, Dict
+from typing import Any, List
 from uuid import UUID
 from enum import Enum
 from datetime import datetime

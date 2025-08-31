@@ -5,7 +5,7 @@ This module provides views for managing conversations between users and AI tutor
 following the testable-first architecture with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List
 from uuid import UUID
 from datetime import datetime
 
@@ -16,12 +16,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 import json
-import time
 
 from homeworks.models import Section
-from .models import Conversation, Submission
+from .models import Conversation
 from .services import ConversationService, SubmissionService
 
 
