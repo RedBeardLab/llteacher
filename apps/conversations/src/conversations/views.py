@@ -678,3 +678,37 @@ class ConversationStreamView(View):
         response['Cache-Control'] = 'no-cache'
         response['Access-Control-Allow-Origin'] = '*'
         return response
+
+
+class ConversationDeleteAndRestartView(View):
+    """View for deleting a conversation and starting a new one."""
+    
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        """Ensure user is logged in before accessing view."""
+        return super().dispatch(*args, **kwargs)
+    
+    def post(self, request: HttpRequest, conversation_id: UUID) -> HttpResponse:
+        """Handle POST requests to delete conversation and start new one."""
+        # Get the conversation and check permissions
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+        
+        # Check if user owns this conversation
+        if conversation.user != request.user:
+            return HttpResponseForbidden("You can only delete your own conversations.")
+        
+        # Store section info before deleting
+        section = conversation.section
+        
+        # Delete the conversation (soft delete)
+        conversation.soft_delete()
+        
+        # Start a new conversation for the same section
+        result = ConversationService.start_conversation(request.user, section)
+        
+        if result.success:
+            messages.success(request, "Previous conversation deleted and new one started.")
+            return redirect('conversations:detail', conversation_id=result.conversation_id)
+        else:
+            messages.error(request, f"Error starting new conversation: {result.error}")
+            return redirect('homeworks:detail', homework_id=section.homework.id)

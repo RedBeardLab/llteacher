@@ -22,8 +22,20 @@
             <div class="card shadow">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h2 class="mb-0">Conversation for {{ conversation_data.section_title }}</h2>
-                    {% if not conversation_data.is_teacher_test and conversation_data.can_submit and user.id == conversation_data.user_id %}
-                    <a href="{% url 'conversations:submit_section' section_id=conversation_data.section_id %}" class="btn btn-success">Submit this section</a>
+                    {% if not conversation_data.is_teacher_test and user.id == conversation_data.user_id %}
+                    <div class="d-flex gap-2">
+                        <form method="post" action="{% url 'conversations:delete_and_restart' conversation_id=conversation_data.id %}" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning" onclick="return confirm('Are you sure you want to delete this conversation and start a new one? This action cannot be undone.')">
+                                <i class="bi bi-arrow-clockwise"></i> Delete & Start New
+                            </button>
+                        </form>
+                        {% if conversation_data.can_submit %}
+                        <a href="{% url 'conversations:submit_section' section_id=conversation_data.section_id %}" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> Submit this section
+                        </a>
+                        {% endif %}
+                    </div>
                     {% endif %}
                 </div>
                 <div class="card-body">

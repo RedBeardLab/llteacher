@@ -5,7 +5,7 @@ This module provides services for managing homework assignments and their sectio
 Following a testable-first approach with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, List, Dict
 from uuid import UUID
 from enum import Enum
 from django.db import transaction
@@ -189,7 +189,8 @@ class HomeworkService:
                 # Check if student has submitted this section
                 submission = Submission.objects.filter(
                     conversation__user=student.user,
-                    conversation__section=section
+                    conversation__section=section,
+                    conversation__is_deleted=False
                 ).first()
                 
                 if submission:
