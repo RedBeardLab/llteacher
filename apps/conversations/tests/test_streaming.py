@@ -117,7 +117,7 @@ class StreamingLLMTest(TestCase):
     def test_streaming_permission_denied(self):
         """Test streaming with wrong user permissions."""
         # Create another user
-        other_user = User.objects.create_user(
+        _other_user = User.objects.create_user(
             username='otheruser',
             email='other@example.com',
             password='otherpass123'

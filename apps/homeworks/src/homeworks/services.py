@@ -11,6 +11,12 @@ from enum import Enum
 from datetime import datetime
 from django.db import transaction
 
+# Import for type hints
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from accounts.models import Teacher, Student
+    from .models import Homework
+
 
 class SectionStatus(str, Enum):
     """Enumeration of possible section status values."""

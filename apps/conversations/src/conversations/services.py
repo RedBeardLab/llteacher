@@ -15,6 +15,11 @@ from homeworks.models import Section
 
 from .models import Conversation
 
+# Import for type hints
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from accounts.models import Teacher, Student
+
 # Data Contracts
 @dataclass
 class MessageData:

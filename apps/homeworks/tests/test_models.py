@@ -93,7 +93,7 @@ class HomeworkModelTest(TestCase):
         self.assertEqual(homework.section_count, 0)
         
         # Create a section
-        section = Section.objects.create(
+        _section = Section.objects.create(
             homework=homework,
             title='Test Section',
             content='Test content',

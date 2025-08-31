@@ -167,7 +167,7 @@ class DeletedConversationsListViewTests(TestCase):
         )
         
         # Create submission for the initial conversation
-        submission = Submission.objects.create(
+        _submission = Submission.objects.create(
             conversation=initial_conversation
         )
         

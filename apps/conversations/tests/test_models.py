@@ -409,8 +409,8 @@ class SubmissionModelTest(TestCase):
     def test_submission_clean_method_validation(self):
         """Test submission clean method validation."""
         # Create first submission
-        submission1 = Submission.objects.create(**self.submission_data)
-        
+        _submission1 = Submission.objects.create(**self.submission_data)
+
         # Try to create another submission for same student and section
         conversation2 = Conversation.objects.create(
             user=self.user,
@@ -443,8 +443,8 @@ class SubmissionModelTest(TestCase):
         )
         
         # Create submission for first section
-        submission1 = Submission.objects.create(**self.submission_data)
-        
+        _submission1 = Submission.objects.create(**self.submission_data)
+
         # Create submission for second section
         conversation2 = Conversation.objects.create(
             user=self.user,
@@ -465,11 +465,11 @@ class SubmissionModelTest(TestCase):
             username='teststudent2',
             password='testpass123'
         )
-        student2 = Student.objects.create(user=student2_user)
-        
+        _student2 = Student.objects.create(user=student2_user)
+
         # Create submission for first student
-        submission1 = Submission.objects.create(**self.submission_data)
-        
+        _submission1 = Submission.objects.create(**self.submission_data)
+
         # Create submission for second student
         conversation2 = Conversation.objects.create(
             user=student2_user,
@@ -692,10 +692,10 @@ class ModelEdgeCasesTest(TestCase):
         )
         
         conversation.soft_delete()
-        first_deleted_at = conversation.deleted_at
+        _first_deleted_at = conversation.deleted_at
         
         conversation.soft_delete()
-        second_deleted_at = conversation.deleted_at
+        _second_deleted_at = conversation.deleted_at
         
         self.assertTrue(conversation.is_deleted)
         # The conversation should remain deleted after second call

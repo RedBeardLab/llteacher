@@ -646,7 +646,7 @@ class SectionDetailView(View):
         # Get the homework and section
         try:
             homework = Homework.objects.get(id=homework_id)
-            section = Section.objects.get(id=section_id, homework=homework)
+            _section = Section.objects.get(id=section_id, homework=homework)
         except (Homework.DoesNotExist, Section.DoesNotExist):
             return redirect('homeworks:detail', homework_id=homework_id)
         
