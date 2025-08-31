@@ -169,7 +169,7 @@ class ConversationDetailView(View):
     def get(self, request: HttpRequest, conversation_id: UUID) -> HttpResponse:
         """Handle GET requests to display the conversation."""
         # Get conversation data using service
-        conversation_data = ConversationService.get_conversation_data(conversation_id)
+        conversation_data = ConversationService.get_conversation_data(conversation_id, request.user)
         
         # Check if conversation exists
         if not conversation_data:
@@ -567,7 +567,7 @@ class MessagesAPIView(View):
         """Get messages for a conversation."""
         try:
             # Get conversation data using existing service
-            conversation_data = ConversationService.get_conversation_data(conversation_id)
+            conversation_data = ConversationService.get_conversation_data(conversation_id, request.user)
             
             if not conversation_data:
                 return JsonResponse({'success': False, 'error': 'Conversation not found.'}, status=404)

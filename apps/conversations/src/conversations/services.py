@@ -30,10 +30,13 @@ class ConversationData:
     user_id: UUID
     section_id: UUID
     section_title: str
+    homework_id: UUID
+    homework_title: str
     created_at: datetime
     updated_at: datetime
     is_teacher_test: bool
     is_student_conversation: bool
+    can_submit: bool
     messages: Optional[List[MessageData]] = None
 
 @dataclass
@@ -162,12 +165,13 @@ class ConversationService:
             )
     
     @staticmethod
-    def get_conversation_data(conversation_id: UUID) -> Optional[ConversationData]:
+    def get_conversation_data(conversation_id: UUID, user: User) -> Optional[ConversationData]:
         """
         Get conversation data including messages.
         
         Args:
             conversation_id: UUID of the conversation to retrieve
+            user: User to determine can_submit status
             
         Returns:
             ConversationData if found, None otherwise
@@ -175,9 +179,9 @@ class ConversationService:
         from .models import Conversation
         
         try:
-            # Get conversation with optimized query
+            # Get conversation with optimized query including homework
             conversation = Conversation.objects.select_related(
-                'user', 'section'
+                'user', 'section', 'section__homework'
             ).get(id=conversation_id)
             
             # Get all messages in conversation
@@ -197,16 +201,27 @@ class ConversationService:
                 )
                 message_data_list.append(message_data)
             
+            # Determine if user can submit this conversation
+            can_submit = (
+                hasattr(user, 'student_profile') and 
+                user.id == conversation.user.id and 
+                not conversation.is_deleted and
+                not conversation.is_teacher_test
+            )
+            
             # Create and return conversation data
             return ConversationData(
                 id=conversation.id,
                 user_id=conversation.user.id,
                 section_id=conversation.section.id,
                 section_title=conversation.section.title,
+                homework_id=conversation.section.homework.id,
+                homework_title=conversation.section.homework.title,
                 created_at=conversation.created_at,
                 updated_at=conversation.updated_at,
                 is_teacher_test=conversation.is_teacher_test,
                 is_student_conversation=conversation.is_student_conversation,
+                can_submit=can_submit,
                 messages=message_data_list
             )
         except Conversation.DoesNotExist:

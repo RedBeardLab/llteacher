@@ -179,7 +179,7 @@ class TestConversationServiceMessages(ConversationServiceTestCase):
         )
         
         # Get conversation data
-        conversation_data = ConversationService.get_conversation_data(self.conversation_id)
+        conversation_data = ConversationService.get_conversation_data(self.conversation_id, self.student_user)
         
         # Check result
         self.assertIsInstance(conversation_data, ConversationData)
@@ -193,3 +193,101 @@ class TestConversationServiceMessages(ConversationServiceTestCase):
         self.assertEqual(conversation_data.messages[1].content, message1.content)
         self.assertEqual(conversation_data.messages[2].id, message2.id)
         self.assertEqual(conversation_data.messages[2].content, message2.content)
+
+
+class TestConversationServiceCanSubmit(ConversationServiceTestCase):
+    """Test cases for can_submit flag logic in ConversationService."""
+    
+    def setUp(self):
+        """Set up test data including conversations."""
+        super().setUp()
+        
+        # Create a student conversation
+        result = ConversationService.start_conversation(
+            self.student_user,
+            self.section
+        )
+        self.student_conversation_id = result.conversation_id
+        self.student_conversation = Conversation.objects.get(id=self.student_conversation_id)
+        
+        # Create a teacher conversation
+        result = ConversationService.start_conversation(
+            self.teacher_user,
+            self.section
+        )
+        self.teacher_conversation_id = result.conversation_id
+        self.teacher_conversation = Conversation.objects.get(id=self.teacher_conversation_id)
+    
+    def test_student_can_submit_own_conversation(self):
+        """Test that a student can submit their own conversation."""
+        conversation_data = ConversationService.get_conversation_data(
+            self.student_conversation_id, 
+            self.student_user
+        )
+        
+        self.assertTrue(conversation_data.can_submit)
+    
+    def test_student_cannot_submit_teacher_conversation(self):
+        """Test that a student cannot submit a teacher's conversation."""
+        conversation_data = ConversationService.get_conversation_data(
+            self.teacher_conversation_id, 
+            self.student_user
+        )
+        
+        self.assertFalse(conversation_data.can_submit)
+    
+    def test_teacher_cannot_submit_own_conversation(self):
+        """Test that a teacher cannot submit their own conversation (teacher test)."""
+        conversation_data = ConversationService.get_conversation_data(
+            self.teacher_conversation_id, 
+            self.teacher_user
+        )
+        
+        self.assertFalse(conversation_data.can_submit)
+    
+    def test_teacher_cannot_submit_student_conversation(self):
+        """Test that a teacher cannot submit a student's conversation."""
+        conversation_data = ConversationService.get_conversation_data(
+            self.student_conversation_id, 
+            self.teacher_user
+        )
+        
+        self.assertFalse(conversation_data.can_submit)
+    
+    def test_cannot_submit_deleted_conversation(self):
+        """Test that a student cannot submit a soft-deleted conversation."""
+        # Soft delete the conversation
+        self.student_conversation.soft_delete()
+        
+        conversation_data = ConversationService.get_conversation_data(
+            self.student_conversation_id, 
+            self.student_user
+        )
+        
+        self.assertFalse(conversation_data.can_submit)
+    
+    def test_homework_fields_populated(self):
+        """Test that homework_id and homework_title are populated correctly."""
+        conversation_data = ConversationService.get_conversation_data(
+            self.student_conversation_id, 
+            self.student_user
+        )
+        
+        self.assertEqual(conversation_data.homework_id, self.homework.id)
+        self.assertEqual(conversation_data.homework_title, self.homework.title)
+    
+    def test_user_without_student_profile_cannot_submit(self):
+        """Test that a user without student_profile cannot submit."""
+        # Create a user without student profile
+        regular_user = User.objects.create_user(
+            username='regularuser',
+            email='regular@example.com',
+            password='password123'
+        )
+        
+        conversation_data = ConversationService.get_conversation_data(
+            self.student_conversation_id, 
+            regular_user
+        )
+        
+        self.assertFalse(conversation_data.can_submit)
