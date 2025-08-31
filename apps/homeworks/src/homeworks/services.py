@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, List, Dict
 from uuid import UUID
 from enum import Enum
+from datetime import datetime
 from django.db import transaction
 
 
@@ -55,6 +56,18 @@ class HomeworkProgressData:
     homework_id: UUID
     sections_progress: list[SectionProgressData]
 
+@dataclass
+class SectionDetailData:
+    """Data contract for detailed section information"""
+    id: UUID
+    title: str
+    content: str
+    order: int
+    has_solution: bool
+    solution_content: str | None
+    created_at: datetime
+    updated_at: datetime
+
 # Missing data contracts that need to be defined
 @dataclass
 class HomeworkDetailData:
@@ -62,12 +75,12 @@ class HomeworkDetailData:
     id: UUID
     title: str
     description: str
-    due_date: Any  # datetime
+    due_date: datetime
     created_by: UUID
-    created_at: Any  # datetime
-    updated_at: Any  # datetime
+    created_at: datetime
+    updated_at: datetime
     llm_config: UUID | None = None
-    sections: list[Any] | None = None  # Will be defined with a proper type
+    sections: list[SectionDetailData] | None = None
 
 @dataclass
 class HomeworkUpdateData:
@@ -260,18 +273,18 @@ class HomeworkService:
             ).get(id=homework_id)
             
             # Prepare sections data
-            sections: List[Dict[str, Any]] = []
+            sections: List[SectionDetailData] = []
             for section in homework.sections.order_by('order'):
-                section_data: Dict[str, Any] = {
-                    'id': section.id,
-                    'title': section.title,
-                    'content': section.content,
-                    'order': section.order,
-                    'has_solution': section.solution is not None,
-                    'solution_content': section.solution.content if section.solution else None,
-                    'created_at': section.created_at,
-                    'updated_at': section.updated_at
-                }
+                section_data = SectionDetailData(
+                    id=section.id,
+                    title=section.title,
+                    content=section.content,
+                    order=section.order,
+                    has_solution=section.solution is not None,
+                    solution_content=section.solution.content if section.solution else None,
+                    created_at=section.created_at,
+                    updated_at=section.updated_at
+                )
                 sections.append(section_data)
             
             # Create and return the detailed data

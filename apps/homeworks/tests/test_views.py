@@ -81,8 +81,8 @@ class HomeworkListViewTests(TestCase):
         self.assertEqual(data.homeworks[0].title, self.homework.title)
         self.assertEqual(data.homeworks[0].section_count, 2)
         
-        # Check if progress data is not included for teacher view
-        self.assertIsNone(data.homeworks[0].progress)
+        # Check if section data is not included for teacher view
+        self.assertIsNone(data.homeworks[0].sections)
         self.assertFalse(data.has_progress_data)
     
     @patch('homeworks.services.HomeworkService.get_student_homework_progress')
@@ -120,14 +120,14 @@ class HomeworkListViewTests(TestCase):
         # Check if the homework is included
         self.assertEqual(len(data.homeworks), 1)
         
-        # Check if progress data is included for student view
+        # Check if section data is included for student view
         self.assertTrue(data.has_progress_data)
-        self.assertIsNotNone(data.homeworks[0].progress)
-        self.assertEqual(len(data.homeworks[0].progress), 2)
+        self.assertIsNotNone(data.homeworks[0].sections)
+        self.assertEqual(len(data.homeworks[0].sections), 2)
         
-        # Check one section progress detail
-        self.assertEqual(data.homeworks[0].progress[0]['status'], 'submitted')
-        self.assertEqual(data.homeworks[0].progress[1]['status'], 'not_started')
+        # Check one section detail
+        self.assertEqual(data.homeworks[0].sections[0].status, 'submitted')
+        self.assertEqual(data.homeworks[0].sections[1].status, 'not_started')
     
     def test_get_view_data_for_unknown_user(self):
         """Test the _get_view_data method for an unknown user type."""

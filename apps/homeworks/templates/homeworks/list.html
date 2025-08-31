@@ -49,7 +49,7 @@
                         <small class="text-muted">Due: {{ homework.due_date|date:"M d, Y" }}</small>
                     </div>
                     
-                    {% if homework.progress %}
+                    {% if homework.sections %}
                     <div class="mt-3">
                         <div class="progress" style="height: 25px;">
                             <div class="progress-bar bg-success" role="progressbar" 
@@ -64,7 +64,7 @@
                             </div>
                         </div>
                         <div class="mt-2">
-                            {% for section in homework.progress %}
+                            {% for section in homework.sections %}
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <div>
                                     {% if section.conversation_id %}
@@ -72,7 +72,7 @@
                                             Section {{ section.order }}: {{ section.title }}
                                         </a>
                                     {% else %}
-                                        <a href="{% url 'conversations:start' section_id=section.section_id %}" class="text-decoration-none">
+                                        <a href="{% url 'conversations:start' section_id=section.id %}" class="text-decoration-none">
                                             Section {{ section.order }}: {{ section.title }}
                                         </a>
                                     {% endif %}

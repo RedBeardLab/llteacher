@@ -190,4 +190,4 @@ class TestHomeworkListViewProgress(TestCase):
         # Teacher view should have default 0% values and no progress data
         self.assertEqual(homework_item.completed_percentage, 0)
         self.assertEqual(homework_item.in_progress_percentage, 0)
-        self.assertIsNone(homework_item.progress)
+        self.assertIsNone(homework_item.sections)

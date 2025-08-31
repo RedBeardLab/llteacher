@@ -331,8 +331,8 @@ class TestHomeworkServiceDetails(HomeworkServiceTestCase):
         # Check sections data
         self.assertEqual(len(detail_data.sections), 2)
         assert detail_data.sections is not None
-        self.assertEqual(detail_data.sections[0]['title'], self.section1.title)
-        self.assertEqual(detail_data.sections[1]['title'], self.section2.title)
+        self.assertEqual(detail_data.sections[0].title, self.section1.title)
+        self.assertEqual(detail_data.sections[1].title, self.section2.title)
 
     def test_get_homework_not_found(self):
         """Test getting homework that doesn't exist."""

@@ -5,7 +5,7 @@ This module provides views for managing homework assignments and their sections,
 following the testable-first architecture with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import Dict, Any
 from uuid import UUID
 from django.forms import formset_factory
 
@@ -25,6 +25,20 @@ from .forms import HomeworkForm, SectionForm, SectionFormSet
 
 
 @dataclass
+class SectionData:
+    """Unified data structure for section information used in both list and detail views."""
+    id: UUID
+    title: str
+    order: int
+    status: str | None = None
+    conversation_id: UUID | None = None
+    # Optional fields for detail view
+    content: str | None = None
+    has_solution: bool = False
+    solution_content: str | None = None
+
+
+@dataclass
 class HomeworkListItem:
     """Data structure for a single homework item in the list view."""
     id: UUID
@@ -34,7 +48,7 @@ class HomeworkListItem:
     section_count: int
     created_at: Any  # datetime
     is_overdue: bool
-    progress: Optional[List[Dict[str, Any]]] = None
+    sections: list[SectionData] | None = None
     completed_percentage: int = 0
     in_progress_percentage: int = 0
 
@@ -42,7 +56,7 @@ class HomeworkListItem:
 @dataclass
 class HomeworkListData:
     """Data structure for the homework list view."""
-    homeworks: List[HomeworkListItem]
+    homeworks: list[HomeworkListItem]
     user_type: str  # 'teacher', 'student', or 'unknown'
     total_count: int
     has_progress_data: bool
@@ -105,7 +119,7 @@ class HomeworkListView(View):
                     section_count=homework.section_count,
                     created_at=homework.created_at,
                     is_overdue=homework.is_overdue,
-                    progress=None  # No progress data needed for teacher view
+                    sections=None  # No section data needed for teacher view
                 ))
             
         elif student_profile:
@@ -124,16 +138,16 @@ class HomeworkListView(View):
                     homework
                 )
                 
-                # Format progress data for the view
-                progress = []
+                # Format section data for the view using SectionData objects
+                sections = []
                 for section_progress in progress_data.sections_progress:
-                    progress.append({
-                        'section_id': section_progress.section_id,
-                        'title': section_progress.title,
-                        'order': section_progress.order,
-                        'status': section_progress.status,
-                        'conversation_id': section_progress.conversation_id
-                    })
+                    sections.append(SectionData(
+                        id=section_progress.section_id,
+                        title=section_progress.title,
+                        order=section_progress.order,
+                        status=section_progress.status,
+                        conversation_id=section_progress.conversation_id
+                    ))
                 
                 # Calculate percentages directly in the view
                 total_sections = len(progress_data.sections_progress)
@@ -151,7 +165,7 @@ class HomeworkListView(View):
                     section_count=homework.section_count,
                     created_at=homework.created_at,
                     is_overdue=homework.is_overdue,
-                    progress=progress,
+                    sections=sections,
                     completed_percentage=completed_percentage,
                     in_progress_percentage=in_progress_percentage
                 ))
@@ -170,19 +184,6 @@ class HomeworkListView(View):
 
 
 @dataclass
-class SectionDetailData:
-    """Data structure for a single section in the homework detail view."""
-    id: UUID
-    title: str
-    content: str
-    order: int
-    has_solution: bool
-    solution_content: Optional[str]
-    status: Optional[str] = None
-    conversation_id: Optional[UUID] = None
-
-
-@dataclass
 class HomeworkDetailData:
     """Data structure for the homework detail view."""
     id: UUID
@@ -192,11 +193,11 @@ class HomeworkDetailData:
     created_by: UUID
     created_by_name: str
     created_at: Any  # datetime
-    sections: List[SectionDetailData]
+    sections: list[SectionData]
     is_overdue: bool
     user_type: str  # 'teacher', 'student', or 'unknown'
     can_edit: bool
-    llm_config: Optional[Dict[str, Any]] = None
+    llm_config: Dict[str, Any] | None = None
 
 
 @dataclass
@@ -530,7 +531,7 @@ class HomeworkDetailView(View):
         # Render the template with the data
         return render(request, 'homeworks/detail.html', {'data': data})
     
-    def _get_view_data(self, user, homework_id: UUID) -> Optional[HomeworkDetailData]:
+    def _get_view_data(self, user, homework_id: UUID) -> HomeworkDetailData | None:
         """
         Prepare data for the homework detail view based on user type.
         
@@ -583,17 +584,17 @@ class HomeworkDetailView(View):
         
         for section_data in homework_detail.sections:
             # Get progress data for this section if available
-            progress = section_progress_map.get(section_data['id'])
+            progress = section_progress_map.get(section_data.id)
             
-            sections.append(SectionDetailData(
-                id=section_data['id'],
-                title=section_data['title'],
-                content=section_data['content'],
-                order=section_data['order'],
-                has_solution=section_data['has_solution'],
-                solution_content=section_data['solution_content'],
+            sections.append(SectionData(
+                id=section_data.id,
+                title=section_data.title,
+                order=section_data.order,
                 status=progress.status if progress else None,
-                conversation_id=progress.conversation_id if progress else None
+                conversation_id=progress.conversation_id if progress else None,
+                content=section_data.content,
+                has_solution=section_data.has_solution,
+                solution_content=section_data.solution_content
             ))
         
         # Get teacher name
@@ -628,9 +629,9 @@ class SectionDetailViewData:
     section_content: str
     section_order: int
     has_solution: bool
-    solution_content: Optional[str]
-    conversations: Optional[List[Dict[str, Any]]] = None
-    submission: Optional[Dict[str, Any]] = None
+    solution_content: str | None
+    conversations: list[Dict[str, Any]] | None = None
+    submission: Dict[str, Any] | None = None
     is_teacher: bool = False
     is_student: bool = False
 
@@ -682,7 +683,7 @@ class SectionDetailView(View):
         # Render the template with the data
         return render(request, 'homeworks/section_detail.html', {'data': data})
     
-    def _get_view_data(self, user, homework_id: UUID, section_id: UUID) -> Optional[SectionDetailViewData]:
+    def _get_view_data(self, user, homework_id: UUID, section_id: UUID) -> SectionDetailViewData | None:
         """
         Prepare data for the section detail view based on user type.
         

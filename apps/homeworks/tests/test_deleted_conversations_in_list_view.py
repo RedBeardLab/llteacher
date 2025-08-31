@@ -74,18 +74,18 @@ class DeletedConversationsListViewTests(TestCase):
                 break
         
         self.assertIsNotNone(homework_progress, "Homework should be found in list")
-        self.assertIsNotNone(homework_progress.progress, "Progress data should exist")
+        self.assertIsNotNone(homework_progress.sections, "Section data should exist")
         
         # Find the section progress
         section_progress = None
-        for section in homework_progress.progress:
-            if section['section_id'] == self.section.id:
+        for section in homework_progress.sections:
+            if section.id == self.section.id:
                 section_progress = section
                 break
         
         self.assertIsNotNone(section_progress, "Section progress should exist")
         self.assertEqual(
-            section_progress['conversation_id'], 
+            section_progress.conversation_id, 
             initial_conversation.id,
             "Initial conversation should appear in progress data"
         )
@@ -113,12 +113,12 @@ class DeletedConversationsListViewTests(TestCase):
                 break
         
         self.assertIsNotNone(homework_progress, "Homework should still be found in list")
-        self.assertIsNotNone(homework_progress.progress, "Progress data should still exist")
+        self.assertIsNotNone(homework_progress.sections, "Section data should still exist")
         
         # Find the section progress
         section_progress = None
-        for section in homework_progress.progress:
-            if section['section_id'] == self.section.id:
+        for section in homework_progress.sections:
+            if section.id == self.section.id:
                 section_progress = section
                 break
         
@@ -126,14 +126,14 @@ class DeletedConversationsListViewTests(TestCase):
         
         # This is the key assertion - it should show the NEW conversation, not the deleted one
         self.assertEqual(
-            section_progress['conversation_id'], 
+            section_progress.conversation_id, 
             new_conversation.id,
             "New conversation should appear in progress data, not the deleted one"
         )
         
         # Additional verification: ensure the deleted conversation ID is NOT in the progress
         self.assertNotEqual(
-            section_progress['conversation_id'], 
+            section_progress.conversation_id, 
             initial_conversation.id,
             "Deleted conversation should NOT appear in progress data"
         )
