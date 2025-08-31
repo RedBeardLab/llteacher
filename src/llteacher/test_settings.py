@@ -3,7 +3,7 @@ Test settings for LLTeacher project.
 This file inherits from the main settings and overrides specific settings for testing.
 """
 
-from .settings import *
+from .settings import *  # noqa: F403
 
 # Use in-memory database for testing (faster and isolated)
 DATABASES = {
@@ -76,7 +76,7 @@ INSTALLED_APPS = [
 ]
 
 # Disable template debugging for faster tests
-TEMPLATES[0]['OPTIONS']['debug'] = False
+TEMPLATES[0]['OPTIONS']['debug'] = False  # noqa: F405
 
 # Use faster timezone for tests
 USE_TZ = False

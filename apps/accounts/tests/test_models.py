@@ -209,7 +209,7 @@ class ModelValidationTest(TestCase):
     
     def test_username_uniqueness(self):
         """Test username uniqueness constraint."""
-        user1 = self.User.objects.create_user(
+        _user1 = self.User.objects.create_user(
             username='uniqueuser',
             password='testpass123'
         )
