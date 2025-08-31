@@ -9,9 +9,11 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
 from django.db import transaction
-from django.contrib.auth import get_user_model
 
-User = get_user_model()
+from accounts.models import User
+from homeworks.models import Section
+
+from .models import Conversation
 
 # Data Contracts
 @dataclass
