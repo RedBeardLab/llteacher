@@ -33,7 +33,11 @@
         <div class="col">
             <div class="card h-100 {% if homework.is_overdue %}border-danger{% endif %}">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">{{ homework.title }}</h5>
+                    <h5 class="card-title mb-0">
+                        <a href="{% url 'homeworks:detail' homework.id %}" class="text-decoration-none">
+                            {{ homework.title }}
+                        </a>
+                    </h5>
                     {% if homework.is_overdue %}
                     <span class="badge bg-danger">Overdue</span>
                     {% endif %}

@@ -178,6 +178,8 @@ class SectionDetailData:
     order: int
     has_solution: bool
     solution_content: Optional[str]
+    status: Optional[str] = None
+    conversation_id: Optional[UUID] = None
 
 
 @dataclass
@@ -565,14 +567,33 @@ class HomeworkDetailView(View):
         
         # Format sections data
         sections = []
+        
+        # Get section progress for students
+        section_progress_map = {}
+        if student_profile:
+            # Get the homework object for progress calculation
+            try:
+                homework_obj = Homework.objects.get(id=homework_id)
+                progress_data = HomeworkService.get_student_homework_progress(student_profile, homework_obj)
+                # Create a map of section_id -> progress data for easy lookup
+                for progress in progress_data.sections_progress:
+                    section_progress_map[progress.section_id] = progress
+            except Homework.DoesNotExist:
+                pass
+        
         for section_data in homework_detail.sections:
+            # Get progress data for this section if available
+            progress = section_progress_map.get(section_data['id'])
+            
             sections.append(SectionDetailData(
                 id=section_data['id'],
                 title=section_data['title'],
                 content=section_data['content'],
                 order=section_data['order'],
                 has_solution=section_data['has_solution'],
-                solution_content=section_data['solution_content']
+                solution_content=section_data['solution_content'],
+                status=progress.status if progress else None,
+                conversation_id=progress.conversation_id if progress else None
             ))
         
         # Get teacher name
