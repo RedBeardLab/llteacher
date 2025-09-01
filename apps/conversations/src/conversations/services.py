@@ -386,15 +386,15 @@ class ConversationService:
     @staticmethod
     def _create_initial_message(section: 'Section') -> str:
         """
-        Create initial AI message for a section.
+        Create initial AI message for a section that includes the question.
         
         Args:
             section: Section object
             
         Returns:
-            String containing the initial message
+            String containing the initial message with the section question
         """
-        return f"Hello! I'm here to help you with Section {section.order}: {section.title}. What would you like to work on?"
+        return f"Hello! I'm here to help you with Section {section.order}: {section.title}.\n\n{section.content}\n\nHow can I assist you with this question?"
 
 
 class SubmissionService:

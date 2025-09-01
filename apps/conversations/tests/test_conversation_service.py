@@ -117,6 +117,29 @@ class TestConversationServiceStart(ConversationServiceTestCase):
         # Check result indicates failure
         self.assertFalse(result.success)
         self.assertIsNotNone(result.error)
+    
+    @patch('conversations.services.ConversationService._create_initial_message')
+    def test_initial_message_creation_called_with_section(self, mock_create_initial_message):
+        """Test that _create_initial_message is called with the correct section."""
+        # Mock the initial message content
+        mock_message_content = "Mocked initial message content"
+        mock_create_initial_message.return_value = mock_message_content
+        
+        result = ConversationService.start_conversation(
+            self.student_user,
+            self.section
+        )
+        
+        # Check result is successful
+        self.assertTrue(result.success)
+        
+        # Verify that _create_initial_message was called with the section
+        mock_create_initial_message.assert_called_once_with(self.section)
+        
+        # Verify that the message was created with the mocked content
+        message = Message.objects.get(id=result.initial_message_id)
+        self.assertEqual(message.content, mock_message_content)
+        self.assertEqual(message.message_type, Message.MESSAGE_TYPE_AI)
 
 
 class TestConversationServiceMessages(ConversationServiceTestCase):
