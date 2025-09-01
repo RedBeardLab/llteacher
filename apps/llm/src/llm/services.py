@@ -78,6 +78,25 @@ class LLMService:
     """
     
     @staticmethod
+    def generate_response(conversation: 'Conversation', content: str, message_type: str, streaming: bool = False) -> str | Iterator[str]:
+        """
+        Unified response generation supporting both streaming and non-streaming modes.
+        
+        Args:
+            conversation: Conversation object
+            content: Latest message content
+            message_type: Type of message
+            streaming: If True, returns Iterator[str], else complete string
+            
+        Returns:
+            Complete response string or token iterator
+        """
+        if streaming:
+            return LLMService.stream_response(conversation, content, message_type)
+        else:
+            return LLMService.get_response(conversation, content, message_type)
+    
+    @staticmethod
     def get_response(conversation: 'Conversation', content: str, message_type: str) -> str:
         """
         Generate an AI response based on conversation context.

@@ -106,17 +106,16 @@ class MessageSendViewTests(TestCase):
         self.client.login(username='studentuser', password='password123')
         
         # Send a message
-        with patch('conversations.services.ConversationService.send_message') as mock_send_message:
+        with patch('conversations.services.ConversationService.process_message') as mock_process_message:
             # Mock the service response
             mock_user_message_id = UUID('12345678-1234-5678-1234-567812345678')
             mock_ai_message_id = UUID('87654321-8765-4321-8765-432187654321')
             mock_result = MagicMock(
                 success=True,
                 user_message_id=mock_user_message_id,
-                ai_message_id=mock_ai_message_id,
-                ai_response="AI response to the message"
+                ai_message_id=mock_ai_message_id
             )
-            mock_send_message.return_value = mock_result
+            mock_process_message.return_value = mock_result
             
             # Send the message
             response = self.client.post(self.student_message_url, {
@@ -124,10 +123,11 @@ class MessageSendViewTests(TestCase):
             })
             
             # Check that the service was called correctly
-            mock_send_message.assert_called_once()
-            args = mock_send_message.call_args[0]
-            self.assertEqual(args[0].id, self.student_conversation.id)
-            self.assertEqual(args[1], 'Hello, this is a test message')
+            mock_process_message.assert_called_once()
+            args, kwargs = mock_process_message.call_args
+            self.assertEqual(args[0].conversation_id, self.student_conversation.id)
+            self.assertEqual(args[0].content, 'Hello, this is a test message')
+            self.assertEqual(kwargs['streaming'], False)
             
             # Check redirect to conversation detail
             self.assertEqual(response.status_code, 302)
@@ -144,8 +144,9 @@ class MessageSendViewTests(TestCase):
             'content': 'This should not be allowed'
         })
         
-        # Check access is denied
-        self.assertEqual(response.status_code, 403)
+        # Check that we get an error form response (new unified behavior)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "You don&#x27;t have permission to send messages in this conversation.")
     
     def test_teacher_can_send_message_to_own_conversation(self):
         """Test that a teacher can send a message to their own conversation."""
@@ -153,17 +154,16 @@ class MessageSendViewTests(TestCase):
         self.client.login(username='teacheruser', password='password123')
         
         # Send a message
-        with patch('conversations.services.ConversationService.send_message') as mock_send_message:
+        with patch('conversations.services.ConversationService.process_message') as mock_process_message:
             # Mock the service response
             mock_user_message_id = UUID('12345678-1234-5678-1234-567812345678')
             mock_ai_message_id = UUID('87654321-8765-4321-8765-432187654321')
             mock_result = MagicMock(
                 success=True,
                 user_message_id=mock_user_message_id,
-                ai_message_id=mock_ai_message_id,
-                ai_response="AI response to the teacher's message"
+                ai_message_id=mock_ai_message_id
             )
-            mock_send_message.return_value = mock_result
+            mock_process_message.return_value = mock_result
             
             # Send the message
             response = self.client.post(self.teacher_message_url, {
@@ -171,15 +171,16 @@ class MessageSendViewTests(TestCase):
             })
             
             # Check that the service was called correctly
-            mock_send_message.assert_called_once()
-            args = mock_send_message.call_args[0]
-            self.assertEqual(args[0].id, self.teacher_conversation.id)
-            self.assertEqual(args[1], 'Teacher test message')
+            mock_process_message.assert_called_once()
+            args, kwargs = mock_process_message.call_args
+            self.assertEqual(args[0].conversation_id, self.teacher_conversation.id)
+            self.assertEqual(args[0].content, 'Teacher test message')
+            self.assertEqual(kwargs['streaming'], False)
             
             # Check redirect to conversation detail
             self.assertEqual(response.status_code, 302)
             expected_url = reverse('conversations:detail', kwargs={'conversation_id': self.teacher_conversation.id})
-            self.assertEqual(response.url, expected_url)
+            self.assertRedirects(response, expected_url)
     
     def test_teacher_cannot_send_message_to_student_conversation(self):
         """Test that a teacher cannot send a message to a student's conversation."""
@@ -191,8 +192,9 @@ class MessageSendViewTests(TestCase):
             'content': 'This should not be allowed'
         })
         
-        # Check access is denied (teachers can view student conversations but not send messages)
-        self.assertEqual(response.status_code, 403)
+        # Check that we get an error form response (new unified behavior)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "You don&#x27;t have permission to send messages in this conversation.")
     
     def test_send_message_with_empty_content(self):
         """Test sending a message with empty content."""
@@ -208,8 +210,8 @@ class MessageSendViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Message content is required.")
     
-    @patch('conversations.services.ConversationService.send_message')
-    def test_send_message_service_error(self, mock_send_message):
+    @patch('conversations.services.ConversationService.process_message')
+    def test_send_message_service_error(self, mock_process_message):
         """Test error handling when service fails."""
         # Login as student
         self.client.login(username='studentuser', password='password123')
@@ -217,9 +219,9 @@ class MessageSendViewTests(TestCase):
         # Mock service error response
         mock_result = MagicMock(
             success=False,
-            error="Failed to send message"
+            error="Unexpected response from service."
         )
-        mock_send_message.return_value = mock_result
+        mock_process_message.return_value = mock_result
         
         # Send the message
         response = self.client.post(self.student_message_url, {
@@ -228,7 +230,7 @@ class MessageSendViewTests(TestCase):
         
         # Check that the form shows an error
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Failed to send message")
+        self.assertContains(response, "Unexpected response from service.")
     
     def test_conversation_does_not_exist(self):
         """Test the view behavior when the conversation does not exist."""
@@ -245,8 +247,9 @@ class MessageSendViewTests(TestCase):
             'content': 'Should not work'
         })
         
-        # Check response is a 404
-        self.assertEqual(response.status_code, 404)
+        # Check that we get an error response (unified validation catches this)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "You don&#x27;t have permission to send messages in this conversation.")
     
     def test_special_message_types(self):
         """Test sending messages with special types."""
@@ -254,14 +257,14 @@ class MessageSendViewTests(TestCase):
         self.client.login(username='studentuser', password='password123')
         
         # Send R code message
-        with patch('conversations.services.ConversationService.send_message') as mock_send_message:
+        with patch('conversations.services.ConversationService.process_message') as mock_process_message:
             # Mock the service response
             mock_result = MagicMock(
                 success=True,
                 user_message_id=UUID('12345678-1234-5678-1234-567812345678'),
                 ai_message_id=UUID('87654321-8765-4321-8765-432187654321')
             )
-            mock_send_message.return_value = mock_result
+            mock_process_message.return_value = mock_result
             
             # Send the message with r_code type
             response = self.client.post(self.student_message_url, {
@@ -270,9 +273,10 @@ class MessageSendViewTests(TestCase):
             })
             
             # Check that the service was called with the correct message type
-            mock_send_message.assert_called_once()
-            args = mock_send_message.call_args[0]
-            self.assertEqual(args[2], 'r_code')
+            mock_process_message.assert_called_once()
+            args, kwargs = mock_process_message.call_args
+            self.assertEqual(args[0].message_type, 'r_code')
+            self.assertEqual(kwargs['streaming'], False)
             
             # Check redirect
             self.assertEqual(response.status_code, 302)

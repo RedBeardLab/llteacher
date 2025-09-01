@@ -5,7 +5,7 @@ This module provides services for managing conversations between users and AI tu
 Following a testable-first approach with typed data contracts.
 """
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Iterator
 from datetime import datetime
 from uuid import UUID
 from django.db import transaction
@@ -21,6 +21,29 @@ if TYPE_CHECKING:
     from accounts.models import Teacher, Student
 
 # Data Contracts
+@dataclass
+class MessageProcessingRequest:
+    """Unified request structure for message processing."""
+    conversation_id: UUID
+    user: User
+    content: str
+    message_type: str = 'student'
+
+@dataclass
+class StreamEvent:
+    """Base class for streaming events."""
+    type: str
+    timestamp: datetime
+    data: dict[str, Any]
+
+@dataclass
+class MessageProcessingResult:
+    """Unified result structure for message processing."""
+    user_message_id: UUID
+    ai_message_id: UUID
+    success: bool = True
+    error: Optional[str] = None
+
 @dataclass
 class MessageData:
     id: UUID
@@ -124,52 +147,6 @@ class ConversationService:
                 error=str(e)
             )
     
-    @staticmethod
-    def send_message(conversation: 'Conversation', content: str, message_type: str = 'student') -> MessageSendResult:
-        """
-        Send a user message and get AI response.
-        
-        Args:
-            conversation: Conversation object
-            content: Message content
-            message_type: Type of message (default: 'student')
-            
-        Returns:
-            MessageSendResult with user and AI message IDs and content
-        """
-        from .models import Message
-        from llm.services import LLMService
-        
-        try:
-            # Create user message
-            user_message = Message.objects.create(
-                conversation=conversation,
-                content=content,
-                message_type=message_type
-            )
-            
-            # Get AI response using LLMService
-            ai_response = LLMService.get_response(conversation, content, message_type)
-            
-            # Create AI message
-            ai_message = Message.objects.create(
-                conversation=conversation,
-                content=ai_response,
-                message_type=Message.MESSAGE_TYPE_AI
-            )
-            
-            # Return success result
-            return MessageSendResult(
-                user_message_id=user_message.id,
-                ai_message_id=ai_message.id,
-                ai_response=ai_response
-            )
-        except Exception as e:
-            # Return failure result
-            return MessageSendResult(
-                success=False,
-                error=str(e)
-            )
     
     @staticmethod
     def get_conversation_data(conversation_id: UUID, user: User) -> Optional[ConversationData]:
@@ -319,10 +296,13 @@ class ConversationService:
                     user_id=conv.user.id,
                     section_id=conv.section.id,
                     section_title=conv.section.title,
+                    homework_id=conv.section.homework.id,
+                    homework_title=conv.section.homework.title,
                     created_at=conv.created_at,
                     updated_at=conv.updated_at,
                     is_teacher_test=conv.is_teacher_test,
-                    is_student_conversation=conv.is_student_conversation
+                    is_student_conversation=conv.is_student_conversation,
+                    can_submit=False  # Teacher test conversations can't be submitted
                 )
                 conversation_data_list.append(conversation_data)
             
@@ -382,6 +362,254 @@ class ConversationService:
                 success=False,
                 error=str(e)
             )
+    
+    @staticmethod
+    def process_message(request: MessageProcessingRequest, streaming: bool = False) -> MessageProcessingResult | Iterator[StreamEvent]:
+        """
+        Unified message processing that supports both streaming and non-streaming modes.
+        
+        Args:
+            request: MessageProcessingRequest with all necessary data
+            streaming: If True, returns Iterator[StreamEvent], else MessageProcessingResult
+            
+        Returns:
+            MessageProcessingResult for non-streaming, Iterator[StreamEvent] for streaming
+        """
+        from .models import Conversation, Message
+        from llm.services import LLMService
+        
+        try:
+            # Get conversation
+            conversation = Conversation.objects.get(id=request.conversation_id)
+            
+            # Validate request
+            validation_error = ConversationService.validate_message_request(request)
+            if validation_error:
+                if streaming:
+                    return ConversationService._create_error_stream(validation_error)
+                else:
+                    return MessageProcessingResult(
+                        user_message_id=UUID('00000000-0000-0000-0000-000000000000'),
+                        ai_message_id=UUID('00000000-0000-0000-0000-000000000000'),
+                        success=False,
+                        error=validation_error
+                    )
+            
+            # Authorize request
+            if not ConversationService.authorize_message_request(request):
+                error_msg = "You don't have permission to send messages in this conversation."
+                if streaming:
+                    return ConversationService._create_error_stream(error_msg)
+                else:
+                    return MessageProcessingResult(
+                        user_message_id=UUID('00000000-0000-0000-0000-000000000000'),
+                        ai_message_id=UUID('00000000-0000-0000-0000-000000000000'),
+                        success=False,
+                        error=error_msg
+                    )
+            
+            # Create user message
+            user_message = Message.objects.create(
+                conversation=conversation,
+                content=request.content,
+                message_type=request.message_type
+            )
+            
+            if streaming:
+                # Return streaming generator
+                return ConversationService._process_streaming_response(
+                    conversation, user_message, request.content, request.message_type
+                )
+            else:
+                # Get complete AI response
+                ai_response = LLMService.get_response(conversation, request.content, request.message_type)
+                
+                # Create AI message
+                ai_message = Message.objects.create(
+                    conversation=conversation,
+                    content=ai_response,
+                    message_type=Message.MESSAGE_TYPE_AI
+                )
+                
+                return MessageProcessingResult(
+                    user_message_id=user_message.id,
+                    ai_message_id=ai_message.id,
+                    success=True
+                )
+                
+        except Conversation.DoesNotExist:
+            error_msg = "Conversation not found."
+            if streaming:
+                return ConversationService._create_error_stream(error_msg)
+            else:
+                return MessageProcessingResult(
+                    user_message_id=UUID('00000000-0000-0000-0000-000000000000'),
+                    ai_message_id=UUID('00000000-0000-0000-0000-000000000000'),
+                    success=False,
+                    error=error_msg
+                )
+        except Exception as e:
+            error_msg = str(e)
+            if streaming:
+                return ConversationService._create_error_stream(error_msg)
+            else:
+                return MessageProcessingResult(
+                    user_message_id=UUID('00000000-0000-0000-0000-000000000000'),
+                    ai_message_id=UUID('00000000-0000-0000-0000-000000000000'),
+                    success=False,
+                    error=error_msg
+                )
+    
+    @staticmethod
+    def validate_message_request(request: MessageProcessingRequest) -> Optional[str]:
+        """
+        Centralized validation for message requests.
+        
+        Args:
+            request: MessageProcessingRequest to validate
+            
+        Returns:
+            Error message if validation fails, None if valid
+        """
+        # Validate content
+        if not request.content or not request.content.strip():
+            return "Message content is required."
+        
+        # Validate message type
+        if not request.message_type:
+            return "Message type is required."
+        
+        return None
+    
+    @staticmethod
+    def authorize_message_request(request: MessageProcessingRequest) -> bool:
+        """
+        Centralized authorization for message requests.
+        
+        Args:
+            request: MessageProcessingRequest to authorize
+            
+        Returns:
+            True if authorized, False otherwise
+        """
+        from .models import Conversation
+        
+        try:
+            conversation = Conversation.objects.get(id=request.conversation_id)
+            
+            # Check if user owns this conversation
+            if conversation.user != request.user:
+                return False
+            
+            # Check if conversation is not deleted
+            if conversation.is_deleted:
+                return False
+            
+            return True
+        except Conversation.DoesNotExist:
+            return False
+    
+    @staticmethod
+    def _process_streaming_response(conversation: 'Conversation', user_message, content: str, message_type: str) -> Iterator[StreamEvent]:
+        """
+        Process streaming AI response.
+        
+        Args:
+            conversation: Conversation object
+            user_message: Created user message
+            content: Message content
+            message_type: Message type
+            
+        Yields:
+            StreamEvent objects for the streaming response
+        """
+        from .models import Message
+        from llm.services import LLMService
+        
+        try:
+            # Send user message confirmation
+            yield StreamEvent(
+                type='user_message',
+                timestamp=datetime.now(),
+                data={
+                    'message_id': str(user_message.id),
+                    'content': content
+                }
+            )
+            
+            # Create AI message placeholder
+            ai_message = Message.objects.create(
+                conversation=conversation,
+                content="",
+                message_type=Message.MESSAGE_TYPE_AI
+            )
+            
+            # Send AI message start
+            yield StreamEvent(
+                type='ai_message_start',
+                timestamp=datetime.now(),
+                data={
+                    'message_id': str(ai_message.id)
+                }
+            )
+            
+            # Stream LLM response
+            full_response = ""
+            for token in LLMService.stream_response(conversation, content, message_type):
+                full_response += token
+                
+                # Update AI message in database
+                ai_message.content = full_response
+                ai_message.save()
+                
+                # Send token via stream
+                yield StreamEvent(
+                    type='ai_token',
+                    timestamp=datetime.now(),
+                    data={
+                        'message_id': str(ai_message.id),
+                        'token': token,
+                        'content': full_response
+                    }
+                )
+            
+            # Send completion signal
+            yield StreamEvent(
+                type='ai_message_complete',
+                timestamp=datetime.now(),
+                data={
+                    'message_id': str(ai_message.id),
+                    'final_content': full_response
+                }
+            )
+            
+        except Exception as e:
+            yield StreamEvent(
+                type='error',
+                timestamp=datetime.now(),
+                data={
+                    'message': str(e)
+                }
+            )
+    
+    @staticmethod
+    def _create_error_stream(error_message: str) -> Iterator[StreamEvent]:
+        """
+        Create an error stream event.
+        
+        Args:
+            error_message: Error message to send
+            
+        Yields:
+            Single error StreamEvent
+        """
+        yield StreamEvent(
+            type='error',
+            timestamp=datetime.now(),
+            data={
+                'message': error_message
+            }
+        )
     
     @staticmethod
     def _create_initial_message(section: 'Section') -> str:

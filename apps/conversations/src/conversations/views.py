@@ -20,7 +20,7 @@ import json
 
 from homeworks.models import Section
 from .models import Conversation
-from .services import ConversationService, SubmissionService
+from .services import ConversationService, SubmissionService, MessageProcessingRequest, StreamEvent
 
 
 @dataclass
@@ -83,6 +83,70 @@ class MessageSendResult:
     error: Optional[str] = None
 
 
+class MessageProcessingMixin:
+    """Mixin providing common message processing functionality."""
+    
+    def validate_and_authorize_request(self, request: HttpRequest, conversation_id: UUID) -> tuple[MessageProcessingRequest | None, str | None]:
+        """
+        Common validation and authorization logic.
+        
+        Args:
+            request: HTTP request object
+            conversation_id: UUID of the conversation
+            
+        Returns:
+            (MessageProcessingRequest, None) if valid, (None, error_message) if invalid
+        """
+        # Parse message content
+        content, message_type = self.parse_message_content(request)
+        if not content:
+            return None, "Message content is required."
+        
+        # Create processing request
+        processing_request = MessageProcessingRequest(
+            conversation_id=conversation_id,
+            user=request.user,
+            content=content,
+            message_type=message_type
+        )
+        
+        # Validate request
+        validation_error = ConversationService.validate_message_request(processing_request)
+        if validation_error:
+            return None, validation_error
+        
+        # Authorize request
+        if not ConversationService.authorize_message_request(processing_request):
+            return None, "You don't have permission to send messages in this conversation."
+        
+        return processing_request, None
+    
+    def parse_message_content(self, request: HttpRequest) -> tuple[str | None, str]:
+        """
+        Parse message content from either form data or JSON.
+        
+        Args:
+            request: HTTP request object
+            
+        Returns:
+            (content, message_type) if valid, (None, message_type) if invalid
+        """
+        if request.content_type == 'application/json':
+            # Parse JSON data (for streaming requests)
+            try:
+                data = json.loads(request.body)
+                content = data.get('content', '').strip()
+                message_type = data.get('message_type', 'student')
+                return content if content else None, message_type
+            except json.JSONDecodeError:
+                return None, 'student'
+        else:
+            # Parse form data (for traditional POST requests)
+            content = request.POST.get('content', '').strip()
+            message_type = request.POST.get('message_type', 'student').strip()
+            if not message_type:
+                message_type = 'student'
+            return content if content else None, message_type
 
 
 class ConversationStartView(View):
@@ -219,7 +283,7 @@ class ConversationDetailView(View):
         return conversation_data
 
 
-class MessageSendView(View):
+class MessageSendView(MessageProcessingMixin, View):
     """View for sending messages in a conversation."""
     
     @method_decorator(login_required)
@@ -229,85 +293,55 @@ class MessageSendView(View):
     
     def post(self, request: HttpRequest, conversation_id: UUID) -> HttpResponse:
         """Handle POST requests to send a message."""
-        # Get the conversation (404 if not found)
-        conversation = get_object_or_404(Conversation, id=conversation_id)
+        # Use unified validation and authorization
+        message_request, error = self.validate_and_authorize_request(request, conversation_id)
+        if error or message_request is None:
+            messages.error(request, error or "Invalid request")
+            return self._render_error_form(request, conversation_id, error or "Invalid request")
         
-        # Check if user owns this conversation
-        if conversation.user != request.user:
-            return HttpResponseForbidden("You can only send messages in your own conversations.")
+        # Use unified service for non-streaming processing
+        result = ConversationService.process_message(message_request, streaming=False)
         
-        # Parse and validate form data
-        form_data = self._parse_form_data(request.POST, conversation_id)
-        
-        # Check for validation errors
-        if form_data.errors:
-            messages.error(request, "There were errors in your message.")
-            return render(request, 'conversations/message_form.html', {
-                'form_data': form_data,
-                'conversation_id': conversation_id
-            })
-        
-        # Send message using service
-        result = ConversationService.send_message(
-            conversation,
-            form_data.content,
-            form_data.message_type
-        )
-        
-        if result.success:
+        # Handle the result (should be MessageProcessingResult when streaming=False)
+        if hasattr(result, 'success') and result.success:
             # Redirect to conversation detail
             messages.success(request, "Message sent successfully.")
             return redirect('conversations:detail', conversation_id=conversation_id)
         else:
             # Show error message
-            messages.error(request, result.error or "Failed to send message.")
-            
-            # Add the error to form data
-            if not form_data.errors:
-                form_data.errors = {}
-            form_data.errors['service'] = result.error or "Failed to send message."
-            
-            # Render the form with errors
-            return render(request, 'conversations/message_form.html', {
-                'form_data': form_data,
-                'conversation_id': conversation_id
-            })
+            error_msg = getattr(result, 'error', None) or "Failed to send message."
+            messages.error(request, error_msg)
+            return self._render_error_form(request, conversation_id, error_msg)
     
-    def _parse_form_data(self, post_data, conversation_id: UUID) -> MessageSendFormData:
+    def _render_error_form(self, request: HttpRequest, conversation_id: UUID, error: str) -> HttpResponse:
         """
-        Parse and validate form data.
+        Render the message form with error information.
         
         Args:
-            post_data: POST data from request
+            request: HTTP request object
             conversation_id: UUID of the conversation
+            error: Error message to display
             
         Returns:
-            MessageSendFormData with validated data or errors
+            HttpResponse with error form
         """
-        # Initialize errors dict
-        errors = {}
-        
-        # Get and validate content
-        content = post_data.get('content', '').strip()
-        if not content:
-            errors['content'] = "Message content is required."
-        
-        # Get message type (default to 'student')
-        message_type = post_data.get('message_type', 'student').strip()
-        if not message_type:
-            message_type = 'student'
-        
-        # Create and return form data
-        return MessageSendFormData(
+        # Create form data with error
+        content, message_type = self.parse_message_content(request)
+        form_data = MessageSendFormData(
             conversation_id=conversation_id,
-            content=content,
+            content=content or "",
             message_type=message_type,
-            errors=errors if errors else None
+            errors={'service': error}
         )
+        
+        return render(request, 'conversations/message_form.html', {
+            'form_data': form_data,
+            'conversation_id': conversation_id
+        })
 
 
 # Simple API Views for Real-time Chat
-class ConversationStreamView(View):
+class ConversationStreamView(MessageProcessingMixin, View):
     """Server-Sent Events view for streaming LLM responses."""
     
     @method_decorator(login_required)
@@ -318,73 +352,61 @@ class ConversationStreamView(View):
     def post(self, request: HttpRequest, conversation_id: UUID) -> StreamingHttpResponse:
         """Stream LLM response via Server-Sent Events."""
         
-        # this stream function does too much parsing, and authz and getting the message
-        # can happen outside
         def stream_llm_response():
             try:
-                # Parse JSON data
-                data = json.loads(request.body)
-                content = data.get('content', '').strip()
-                message_type = data.get('message_type', 'student')
-                
-                # Validate input
-                if not content:
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'Message content is required.'})}\n\n".encode('utf-8')
+                # Use unified validation and authorization
+                message_request, error = self.validate_and_authorize_request(request, conversation_id)
+                if error or message_request is None:
+                    yield self._format_sse_error(error or "Invalid request")
                     return
                 
-                # Get conversation and check permissions
-                conversation = get_object_or_404(Conversation, id=conversation_id)
-                if conversation.user != request.user:
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'Permission denied.'})}\n\n".encode('utf-8')
-                    return
+                # Use unified service for streaming processing
+                event_stream = ConversationService.process_message(message_request, streaming=True)
                 
-                # Create user message first
-                from .models import Message
-                user_message = Message.objects.create(
-                    conversation=conversation,
-                    content=content,
-                    message_type=message_type
-                )
-                
-                # Send user message confirmation
-                yield f"data: {json.dumps({'type': 'user_message', 'message_id': str(user_message.id), 'content': content})}\n\n".encode('utf-8')
-                
-                # Create AI message placeholder
-                ai_message = Message.objects.create(
-                    conversation=conversation,
-                    content="",
-                    message_type='ai'
-                )
-                
-                # Send AI message start
-                yield f"data: {json.dumps({'type': 'ai_message_start', 'message_id': str(ai_message.id)})}\n\n".encode('utf-8')
-                
-                # Stream LLM response
-                from llm.services import LLMService
-                full_response = ""
-                
-                for token in LLMService.stream_response(conversation, content, message_type):
-                    full_response += token
+                # Convert StreamEvent objects to SSE format
+                for event in event_stream:
+                    yield self._format_sse_event(event)
                     
-                    # Update AI message in database
-                    ai_message.content = full_response
-                    ai_message.save()
-                    
-                    # Send token via SSE
-                    yield f"data: {json.dumps({'type': 'ai_token', 'message_id': str(ai_message.id), 'token': token, 'content': full_response})}\n\n".encode('utf-8')
-                
-                # Send completion signal
-                yield f"data: {json.dumps({'type': 'ai_message_complete', 'message_id': str(ai_message.id), 'final_content': full_response})}\n\n".encode('utf-8')
-                
-            except json.JSONDecodeError:
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Invalid JSON data.'})}\n\n".encode('utf-8')
             except Exception as e:
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n".encode('utf-8')
+                yield self._format_sse_error(str(e))
         
         response = StreamingHttpResponse(stream_llm_response(), content_type='text/event-stream')
         response['Cache-Control'] = 'no-cache'
         response['Access-Control-Allow-Origin'] = '*'
         return response
+    
+    def _format_sse_event(self, event: StreamEvent) -> bytes:
+        """
+        Format a StreamEvent as Server-Sent Event data.
+        
+        Args:
+            event: StreamEvent to format
+            
+        Returns:
+            Formatted SSE data as bytes
+        """
+        sse_data = {
+            'type': event.type,
+            'timestamp': event.timestamp.isoformat(),
+            **event.data
+        }
+        return f"data: {json.dumps(sse_data)}\n\n".encode('utf-8')
+    
+    def _format_sse_error(self, error_message: str) -> bytes:
+        """
+        Format an error message as Server-Sent Event data.
+        
+        Args:
+            error_message: Error message to format
+            
+        Returns:
+            Formatted SSE error data as bytes
+        """
+        sse_data = {
+            'type': 'error',
+            'message': error_message
+        }
+        return f"data: {json.dumps(sse_data)}\n\n".encode('utf-8')
 
 
 class ConversationSubmitView(View):

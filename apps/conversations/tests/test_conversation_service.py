@@ -20,9 +20,8 @@ from conversations.services import (
     MessageSendResult
 )
 from homeworks.models import Homework, Section
-from accounts.models import Teacher, Student
+from accounts.models import Teacher, Student, User
 
-User = get_user_model()
 
 class ConversationServiceTestCase(TestCase):
     """Base test case for ConversationService with common setup."""
@@ -160,22 +159,28 @@ class TestConversationServiceMessages(ConversationServiceTestCase):
     @patch('llm.services.LLMService.get_response')
     def test_send_message_success(self, mock_llm_response):
         """Test sending a message and getting AI response successfully."""
+        from conversations.services import MessageProcessingRequest, MessageProcessingResult
+        
         # Mock LLM response
         mock_llm_response.return_value = "This is a mock AI response."
         
-        # Send message
+        # Create message processing request
         message_content = "Test message from student"
-        result = ConversationService.send_message(
-            self.conversation,
-            message_content
+        request = MessageProcessingRequest(
+            conversation_id=self.conversation.id,
+            user=self.student_user,
+            content=message_content,
+            message_type='student'
         )
         
+        # Process message using unified method
+        result = ConversationService.process_message(request, streaming=False)
+        
         # Check result
-        self.assertIsInstance(result, MessageSendResult)
+        self.assertIsInstance(result, MessageProcessingResult)
         self.assertTrue(result.success)
         self.assertIsNotNone(result.user_message_id)
         self.assertIsNotNone(result.ai_message_id)
-        self.assertEqual(result.ai_response, mock_llm_response.return_value)
         
         # Check messages were created
         user_message = Message.objects.get(id=result.user_message_id)
