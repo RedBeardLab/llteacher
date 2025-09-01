@@ -15,7 +15,5 @@ urlpatterns = [
     path('<uuid:conversation_id>/delete-and-restart/', views.ConversationDeleteAndRestartView.as_view(), name='delete_and_restart'),
     
     # API endpoints for real-time chat
-    path('api/<uuid:conversation_id>/send-message/', views.MessageSendAPIView.as_view(), name='api_send_message'),
-    path('api/<uuid:conversation_id>/messages/', views.MessagesAPIView.as_view(), name='api_messages'),
     path('api/<uuid:conversation_id>/stream/', views.ConversationStreamView.as_view(), name='api_stream'),
 ]
