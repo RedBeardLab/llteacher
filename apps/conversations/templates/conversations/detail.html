@@ -71,7 +71,7 @@
                                     {% elif message.message_type == 'code_execution' %}
                                     <pre><code class="output">{{ message.content }}</code></pre>
                                     {% else %}
-                                    <p>{{ message.content|linebreaksbr }}</p>
+                                    <md-block untrusted>{{ message.content }}</md-block>
                                     {% endif %}
                                 </div>
                             </div>
@@ -159,6 +159,124 @@
     .message-system .message-content {
         background-color: #f5f5f5;
         border-left: 4px solid #9e9e9e;
+    }
+    
+    /* Markdown styling within message content */
+    .message-content md-block {
+        font-family: inherit;
+        line-height: 1.6;
+    }
+    
+    .message-content md-block h1,
+    .message-content md-block h2,
+    .message-content md-block h3,
+    .message-content md-block h4,
+    .message-content md-block h5,
+    .message-content md-block h6 {
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: inherit;
+    }
+    
+    .message-content md-block h1 { font-size: 1.5rem; }
+    .message-content md-block h2 { font-size: 1.4rem; }
+    .message-content md-block h3 { font-size: 1.3rem; }
+    .message-content md-block h4 { font-size: 1.2rem; }
+    .message-content md-block h5 { font-size: 1.1rem; }
+    .message-content md-block h6 { font-size: 1rem; }
+    
+    .message-content md-block p {
+        margin-bottom: 0.75rem;
+    }
+    
+    .message-content md-block p:last-child {
+        margin-bottom: 0;
+    }
+    
+    .message-content md-block ul,
+    .message-content md-block ol {
+        margin-bottom: 0.75rem;
+        padding-left: 1.5rem;
+    }
+    
+    .message-content md-block li {
+        margin-bottom: 0.25rem;
+    }
+    
+    .message-content md-block blockquote {
+        margin: 0.75rem 0;
+        padding: 0.5rem 1rem;
+        border-left: 4px solid #dee2e6;
+        background-color: rgba(0, 0, 0, 0.03);
+        font-style: italic;
+    }
+    
+    .message-content md-block code {
+        background-color: rgba(0, 0, 0, 0.1);
+        padding: 0.125rem 0.25rem;
+        border-radius: 0.25rem;
+        font-size: 0.875em;
+        font-family: 'Courier New', Courier, monospace;
+    }
+    
+    .message-content md-block pre {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        margin: 0.75rem 0;
+        overflow-x: auto;
+        font-size: 0.875rem;
+    }
+    
+    .message-content md-block pre code {
+        background-color: transparent;
+        padding: 0;
+        border-radius: 0;
+        font-size: inherit;
+    }
+    
+    .message-content md-block a {
+        color: #007bff;
+        text-decoration: underline;
+    }
+    
+    .message-content md-block a:hover {
+        color: #0056b3;
+        text-decoration: none;
+    }
+    
+    .message-content md-block strong {
+        font-weight: 600;
+    }
+    
+    .message-content md-block em {
+        font-style: italic;
+    }
+    
+    .message-content md-block hr {
+        margin: 1rem 0;
+        border: none;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .message-content md-block table {
+        width: 100%;
+        margin-bottom: 0.75rem;
+        border-collapse: collapse;
+    }
+    
+    .message-content md-block th,
+    .message-content md-block td {
+        padding: 0.5rem;
+        border: 1px solid #dee2e6;
+        text-align: left;
+    }
+    
+    .message-content md-block th {
+        background-color: rgba(0, 0, 0, 0.05);
+        font-weight: 600;
     }
     
     pre {
@@ -399,7 +517,7 @@ class RealTimeChatClient {
                     <small class="text-muted">${this.formatTimestamp(new Date())}</small>
                 </div>
                 <div class="message-content p-3 rounded">
-                    <p>${this.escapeHtml(content).replace(/\n/g, '<br>')}</p>
+                    <md-block untrusted>${this.escapeHtml(content)}</md-block>
                 </div>
             </div>
         `;
@@ -444,14 +562,10 @@ class RealTimeChatClient {
         if (this.currentStreamingMessage) {
             // Remove streaming class and cursor
             this.currentStreamingMessage.classList.remove('ai-message-streaming');
-            const contentP = this.currentStreamingMessage.querySelector('.message-content p');
-            const cursor = contentP.querySelector('.streaming-cursor');
-            if (cursor) {
-                cursor.remove();
-            }
+            const messageContent = this.currentStreamingMessage.querySelector('.message-content');
             
-            // Set final content (in case of any discrepancies)
-            contentP.innerHTML = this.escapeHtml(finalContent).replace(/\n/g, '<br>');
+            // Replace the streaming content with md-block
+            messageContent.innerHTML = `<md-block untrusted>${this.escapeHtml(finalContent)}</md-block>`;
             
             this.currentStreamingMessage = null;
         }
@@ -539,4 +653,14 @@ document.addEventListener('DOMContentLoaded', function() {
     window.chatClient = new RealTimeChatClient(conversationId);
 });
 </script>
+{% endblock %}
+
+{% block extra_js %}
+<!-- md-block for markdown rendering -->
+<script type="module" src="https://md-block.verou.me/md-block.js"></script>
+
+<!-- Prism.js for syntax highlighting -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 {% endblock %}
