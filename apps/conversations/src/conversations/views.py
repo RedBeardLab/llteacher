@@ -10,7 +10,7 @@ from uuid import UUID
 from datetime import datetime
 
 from django.views import View
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, Http404, JsonResponse, StreamingHttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, Http404, StreamingHttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
