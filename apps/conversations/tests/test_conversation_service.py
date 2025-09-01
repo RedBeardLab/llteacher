@@ -6,7 +6,6 @@ the testing-first architecture approach.
 """
 
 from django.test import TestCase
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 from unittest.mock import patch, MagicMock
@@ -16,8 +15,7 @@ from conversations.models import Conversation, Message
 from conversations.services import (
     ConversationService,
     ConversationData,
-    ConversationStartResult,
-    MessageSendResult
+    ConversationStartResult
 )
 from homeworks.models import Homework, Section
 from accounts.models import Teacher, Student, User
