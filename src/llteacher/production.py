@@ -117,6 +117,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Custom user model
 AUTH_USER_MODEL = 'accounts.User'
 
+# CSRF Configuration
+CSRF_TRUSTED_ORIGINS = [
+    f"https://{DOMAIN}",
+    f"https://www.{DOMAIN}",
+]
+
+if DOMAIN == '*':
+    CSRF_TRUSTED_ORIGINS = []
+
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
