@@ -9,12 +9,18 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-this-in-production')
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-ins3cure-change-th1s-in-production001')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['*']  # Configure appropriately for your domain
+# Domain configuration
+DOMAIN = os.environ.get('DOMAIN', 'llteacher.coolify.redbeardlab.com')
+ALLOWED_HOSTS = [DOMAIN, f'www.{DOMAIN}', 'localhost', '127.0.0.1']
+
+# If DOMAIN is set to '*', allow all hosts (for development/testing)
+if DOMAIN == '*':
+    ALLOWED_HOSTS = ['*']
 
 # Application definition
 INSTALLED_APPS = [
