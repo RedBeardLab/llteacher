@@ -67,7 +67,21 @@
                                 </div>
                                 <div class="message-content p-3 rounded">
                                     {% if message.message_type == 'r_code' %}
-                                    <pre><code class="language-r">{{ message.content }}</code></pre>
+                                    <div class="r-code-container">
+                                        <div class="r-code-header">
+                                            <span class="r-code-label">
+                                                <i class="bi bi-code-slash"></i>
+                                                R Code
+                                            </span>
+                                            <button class="btn btn-sm btn-outline-primary r-run-button" 
+                                                    data-message-id="{{ message.id }}" 
+                                                    disabled>
+                                                <i class="bi bi-hourglass-split"></i> Initializing...
+                                            </button>
+                                        </div>
+                                        <pre><code class="language-r">{{ message.content }}</code></pre>
+                                        <div class="r-execution-output" id="r-output-{{ message.id }}"></div>
+                                    </div>
                                     {% elif message.message_type == 'code_execution' %}
                                     <pre><code class="output">{{ message.content }}</code></pre>
                                     {% else %}
@@ -356,6 +370,242 @@
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
+    
+    /* R Code Execution Styling */
+    .r-code-container {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        background-color: #ffffff;
+        margin: 0.5rem 0;
+    }
+    
+    .r-code-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0.75rem;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        border-radius: 0.375rem 0.375rem 0 0;
+    }
+    
+    .r-code-label {
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.875rem;
+    }
+    
+    .r-code-label i {
+        margin-right: 0.25rem;
+        color: #007bff;
+    }
+    
+    .r-run-button {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        transition: all 0.2s ease;
+    }
+    
+    .r-run-button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+    }
+    
+    .r-run-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .r-code-container pre {
+        margin: 0;
+        border-radius: 0;
+        border: none;
+        background-color: #282c34;
+    }
+    
+    .r-execution-output {
+        border-top: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+        border-radius: 0 0 0.375rem 0.375rem;
+        min-height: 0;
+        transition: all 0.3s ease;
+    }
+    
+    .r-execution-output:empty {
+        display: none;
+    }
+    
+    .r-execution-result {
+        padding: 0.75rem;
+    }
+    
+    .r-execution-result.success {
+        background-color: #f8f9fa;
+    }
+    
+    .r-execution-result.error {
+        background-color: #fff5f5;
+        border-left: 4px solid #dc3545;
+    }
+    
+    .r-execution-state {
+        padding: 0.75rem;
+        text-align: center;
+        color: #6c757d;
+    }
+    
+    .r-execution-state.running {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+    }
+    
+    .r-execution-state i.spin {
+        animation: spin 1s linear infinite;
+    }
+    
+    .r-output-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.875rem;
+    }
+    
+    .r-output-header i {
+        margin-right: 0.5rem;
+        color: #28a745;
+    }
+    
+    .r-output pre {
+        background-color: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        padding: 0.75rem;
+        margin: 0;
+        font-size: 0.875rem;
+        color: #212529;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .r-error {
+        color: #721c24;
+    }
+    
+    .r-error i {
+        color: #dc3545;
+        margin-right: 0.5rem;
+    }
+    
+    .r-error pre {
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+        color: #721c24;
+    }
+    
+    .r-success {
+        color: #155724;
+        display: flex;
+        align-items: center;
+    }
+    
+    .r-success i {
+        color: #28a745;
+        margin-right: 0.5rem;
+    }
+    
+    .r-plots {
+        margin-top: 1rem;
+    }
+    
+    .r-plot {
+        margin: 0.5rem 0;
+        text-align: center;
+        background-color: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        padding: 1rem;
+    }
+    
+    .r-plot svg {
+        max-width: 100%;
+        height: auto;
+        border-radius: 0.25rem;
+    }
+    
+    /* WebR Global Loading Indicator */
+    .webr-global-loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+    
+    .webr-loading-content {
+        background-color: #ffffff;
+        padding: 2rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        min-width: 300px;
+    }
+    
+    .webr-loading-content i {
+        font-size: 2rem;
+        color: #007bff;
+        margin-bottom: 1rem;
+        animation: spin 1s linear infinite;
+    }
+    
+    .webr-loading-content span {
+        display: block;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .webr-global-error {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9998;
+        min-width: 400px;
+        max-width: 600px;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .r-code-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+        
+        .r-run-button {
+            align-self: flex-end;
+        }
+        
+        .webr-loading-content {
+            margin: 1rem;
+            min-width: auto;
+        }
+        
+        .webr-global-error {
+            left: 1rem;
+            right: 1rem;
+            transform: none;
+            min-width: auto;
+            max-width: none;
+        }
+    }
 </style>
 
 <!-- Real-time Chat JavaScript -->
@@ -486,7 +736,7 @@ class RealTimeChatClient {
     handleStreamEvent(data) {
         switch (data.type) {
             case 'user_message':
-                this.addUserMessage(data.content, data.message_id);
+                this.addUserMessage(data.content, data.message_id, data.message_type || 'student');
                 break;
                 
             case 'ai_message_start':
@@ -509,7 +759,35 @@ class RealTimeChatClient {
         }
     }
     
-    addUserMessage(content, messageId) {
+    addUserMessage(content, messageId, messageType = 'student') {
+        let messageContentHtml;
+        
+        if (messageType === 'r_code') {
+            // Create R code message with run button
+            messageContentHtml = `
+                <div class="r-code-container">
+                    <div class="r-code-header">
+                        <span class="r-code-label">
+                            <i class="bi bi-code-slash"></i>
+                            R Code
+                        </span>
+                        <button class="btn btn-sm btn-outline-primary r-run-button" 
+                                data-message-id="${messageId}" 
+                                ${window.rExecutionManager && window.rExecutionManager.isInitialized ? '' : 'disabled'}>
+                            ${window.rExecutionManager && window.rExecutionManager.isInitialized ? 
+                              '<i class="bi bi-play-fill"></i> Run Code' : 
+                              '<i class="bi bi-hourglass-split"></i> Initializing...'}
+                        </button>
+                    </div>
+                    <pre><code class="language-r">${this.escapeHtml(content)}</code></pre>
+                    <div class="r-execution-output" id="r-output-${messageId}"></div>
+                </div>
+            `;
+        } else {
+            // Regular message
+            messageContentHtml = `<md-block untrusted>${this.escapeHtml(content)}</md-block>`;
+        }
+        
         const messageHtml = `
             <div class="message-container message-student mb-3" data-message-id="${messageId}">
                 <div class="message-header">
@@ -517,12 +795,18 @@ class RealTimeChatClient {
                     <small class="text-muted">${this.formatTimestamp(new Date())}</small>
                 </div>
                 <div class="message-content p-3 rounded">
-                    <md-block untrusted>${this.escapeHtml(content)}</md-block>
+                    ${messageContentHtml}
                 </div>
             </div>
         `;
         
         this.typingIndicator.insertAdjacentHTML('beforebegin', messageHtml);
+        
+        // If it's R code, bind the run button
+        if (messageType === 'r_code') {
+            this.bindRCodeButton(messageId);
+        }
+        
         this.scrollToBottom();
     }
     
@@ -620,6 +904,49 @@ class RealTimeChatClient {
         }, 5000);
     }
     
+    bindRCodeButton(messageId) {
+        const button = document.querySelector(`[data-message-id="${messageId}"] .r-run-button`);
+        if (button) {
+            button.addEventListener('click', async () => {
+                if (!window.rExecutionManager) {
+                    console.error('R execution manager not available');
+                    return;
+                }
+                
+                // Get the R code from the message
+                const codeElement = document.querySelector(`[data-message-id="${messageId}"] code.language-r`);
+                if (!codeElement) {
+                    console.error('R code not found for message', messageId);
+                    return;
+                }
+                
+                const code = codeElement.textContent;
+                const outputContainer = document.getElementById(`r-output-${messageId}`);
+                
+                if (!outputContainer) {
+                    console.error('Output container not found for message', messageId);
+                    return;
+                }
+                
+                // Execute the R code
+                try {
+                    await window.rExecutionManager.executeCode(code, outputContainer);
+                } catch (error) {
+                    console.error('Error executing R code:', error);
+                    outputContainer.innerHTML = `
+                        <div class="r-execution-result error">
+                            <div class="r-error">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <strong>Execution Error:</strong>
+                                <pre><code>Failed to execute R code: ${error.message}</code></pre>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        }
+    }
+    
     scrollToBottom() {
         setTimeout(() => {
             this.conversationContainer.scrollTop = this.conversationContainer.scrollHeight;
@@ -651,6 +978,14 @@ class RealTimeChatClient {
 document.addEventListener('DOMContentLoaded', function() {
     const conversationId = '{{ conversation_data.id }}';
     window.chatClient = new RealTimeChatClient(conversationId);
+    
+    // Bind existing R code buttons
+    document.querySelectorAll('.r-run-button').forEach(button => {
+        const messageId = button.getAttribute('data-message-id');
+        if (messageId) {
+            window.chatClient.bindRCodeButton(messageId);
+        }
+    });
 });
 </script>
 {% endblock %}
@@ -663,4 +998,330 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+
+<!-- WebR for client-side R execution -->
+<script type="module">
+import { WebR } from 'https://webr.r-wasm.org/latest/webr.mjs';
+
+// Global WebR instance and R execution manager
+window.webRInstance = null;
+window.rExecutionManager = null;
+
+// R Execution Manager Class
+class RExecutionManager {
+    constructor() {
+        this.webR = null;
+        this.isInitialized = false;
+        this.isInitializing = false;
+        this.initializationPromise = null;
+    }
+    
+    async initialize() {
+        if (this.isInitialized) {
+            return this.webR;
+        }
+        
+        if (this.isInitializing) {
+            return this.initializationPromise;
+        }
+        
+        this.isInitializing = true;
+        console.log('Initializing WebR...');
+        
+        this.initializationPromise = this._doInitialize();
+        return this.initializationPromise;
+    }
+    
+    async _doInitialize() {
+        try {
+            // Show global loading indicator
+            this.showGlobalLoadingState(true);
+            
+            // Initialize WebR
+            this.webR = new WebR({
+                SW_URL: 'https://webr.r-wasm.org/latest/',
+            });
+            
+            await this.webR.init();
+            
+            // Install common packages
+            await this.installCommonPackages();
+            
+            this.isInitialized = true;
+            this.isInitializing = false;
+            
+            console.log('WebR initialized successfully');
+            this.showGlobalLoadingState(false);
+            this.enableAllRunButtons();
+            
+            return this.webR;
+        } catch (error) {
+            console.error('Failed to initialize WebR:', error);
+            this.isInitializing = false;
+            this.showGlobalLoadingState(false);
+            this.showGlobalError('Failed to initialize R environment. Please refresh the page to try again.');
+            throw error;
+        }
+    }
+    
+    async installCommonPackages() {
+        try {
+            // Install commonly used packages
+            const packages = ['ggplot2', 'dplyr', 'tidyr'];
+            for (const pkg of packages) {
+                try {
+                    await this.webR.evalR(`if (!require(${pkg}, quietly = TRUE)) { install.packages("${pkg}", quiet = TRUE) }`);
+                } catch (e) {
+                    console.warn(`Failed to install package ${pkg}:`, e);
+                    // Continue with other packages
+                }
+            }
+        } catch (error) {
+            console.warn('Some packages failed to install:', error);
+            // Don't throw - WebR is still usable without these packages
+        }
+    }
+    
+    async executeCode(code, outputContainer) {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
+        
+        try {
+            // Clear previous output
+            outputContainer.innerHTML = '';
+            this.showExecutionState(outputContainer, 'running');
+            
+            // Capture output
+            let output = '';
+            let hasError = false;
+            let plots = [];
+            
+            // Set up output capture
+            await this.webR.evalR(`
+                # Capture text output
+                output_conn <- textConnection("output_text", "w", local = TRUE)
+                sink(output_conn)
+                sink(output_conn, type = "message")
+            `);
+            
+            try {
+                // Execute the R code
+                const result = await this.webR.evalR(code);
+                
+                // Stop output capture
+                await this.webR.evalR(`
+                    sink(type = "message")
+                    sink()
+                    close(output_conn)
+                `);
+                
+                // Get captured output
+                const capturedOutput = await this.webR.evalR('paste(output_text, collapse = "\\n")');
+                output = await capturedOutput.toString();
+                
+                // Check for plots
+                plots = await this.capturePlots();
+                
+            } catch (error) {
+                hasError = true;
+                output = error.message || 'An error occurred during execution';
+                
+                // Stop output capture even on error
+                try {
+                    await this.webR.evalR(`
+                        sink(type = "message")
+                        sink()
+                        close(output_conn)
+                    `);
+                } catch (e) {
+                    // Ignore cleanup errors
+                }
+            }
+            
+            // Display results
+            this.displayResults(outputContainer, output, plots, hasError);
+            
+        } catch (error) {
+            console.error('R execution error:', error);
+            this.showExecutionError(outputContainer, error.message || 'Failed to execute R code');
+        }
+    }
+    
+    async capturePlots() {
+        try {
+            // Check if there are any plots in the current device
+            const hasPlots = await this.webR.evalR('length(dev.list()) > 0');
+            if (!await hasPlots.toBoolean()) {
+                return [];
+            }
+            
+            // Get plot as SVG
+            const plotSvg = await this.webR.evalR(`
+                if (length(dev.list()) > 0) {
+                    tmp_file <- tempfile(fileext = ".svg")
+                    svg(tmp_file, width = 8, height = 6)
+                    dev.copy()
+                    dev.off()
+                    readLines(tmp_file)
+                } else {
+                    character(0)
+                }
+            `);
+            
+            const svgContent = await plotSvg.toArray();
+            if (svgContent.length > 0) {
+                return [svgContent.join('\n')];
+            }
+            
+            return [];
+        } catch (error) {
+            console.warn('Failed to capture plots:', error);
+            return [];
+        }
+    }
+    
+    displayResults(container, output, plots, hasError) {
+        container.innerHTML = '';
+        
+        if (hasError) {
+            container.innerHTML = `
+                <div class="r-execution-result error">
+                    <div class="r-error">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Error:</strong>
+                        <pre><code>${this.escapeHtml(output)}</code></pre>
+                    </div>
+                </div>
+            `;
+        } else {
+            let resultHtml = '<div class="r-execution-result success">';
+            
+            // Add text output if present
+            if (output && output.trim()) {
+                resultHtml += `
+                    <div class="r-output">
+                        <div class="r-output-header">
+                            <i class="bi bi-terminal"></i>
+                            <strong>Output:</strong>
+                        </div>
+                        <pre><code>${this.escapeHtml(output)}</code></pre>
+                    </div>
+                `;
+            }
+            
+            // Add plots if present
+            if (plots && plots.length > 0) {
+                resultHtml += `
+                    <div class="r-plots">
+                        <div class="r-output-header">
+                            <i class="bi bi-graph-up"></i>
+                            <strong>Plot:</strong>
+                        </div>
+                `;
+                
+                plots.forEach((plot, index) => {
+                    resultHtml += `<div class="r-plot">${plot}</div>`;
+                });
+                
+                resultHtml += '</div>';
+            }
+            
+            // Show success message if no output
+            if (!output.trim() && plots.length === 0) {
+                resultHtml += `
+                    <div class="r-success">
+                        <i class="bi bi-check-circle"></i>
+                        <span>Code executed successfully (no output)</span>
+                    </div>
+                `;
+            }
+            
+            resultHtml += '</div>';
+            container.innerHTML = resultHtml;
+        }
+    }
+    
+    showExecutionState(container, state) {
+        if (state === 'running') {
+            container.innerHTML = `
+                <div class="r-execution-state running">
+                    <i class="bi bi-arrow-repeat spin"></i>
+                    <span>Executing R code...</span>
+                </div>
+            `;
+        }
+    }
+    
+    showExecutionError(container, message) {
+        container.innerHTML = `
+            <div class="r-execution-result error">
+                <div class="r-error">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Execution Error:</strong>
+                    <pre><code>${this.escapeHtml(message)}</code></pre>
+                </div>
+            </div>
+        `;
+    }
+    
+    showGlobalLoadingState(show) {
+        let indicator = document.getElementById('webr-loading-indicator');
+        
+        if (show && !indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'webr-loading-indicator';
+            indicator.className = 'webr-global-loading';
+            indicator.innerHTML = `
+                <div class="webr-loading-content">
+                    <i class="bi bi-arrow-repeat spin"></i>
+                    <span>Initializing R environment...</span>
+                </div>
+            `;
+            document.body.appendChild(indicator);
+        } else if (!show && indicator) {
+            indicator.remove();
+        }
+    }
+    
+    showGlobalError(message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-danger alert-dismissible fade show webr-global-error';
+        errorDiv.innerHTML = `
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>R Environment Error:</strong> ${this.escapeHtml(message)}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const container = document.querySelector('.container');
+        if (container) {
+            container.insertBefore(errorDiv, container.firstChild);
+        }
+    }
+    
+    enableAllRunButtons() {
+        const buttons = document.querySelectorAll('.r-run-button');
+        buttons.forEach(button => {
+            button.disabled = false;
+            button.innerHTML = '<i class="bi bi-play-fill"></i> Run Code';
+        });
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+// Initialize R execution manager when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    window.rExecutionManager = new RExecutionManager();
+    
+    // Start WebR initialization in background
+    window.rExecutionManager.initialize().catch(error => {
+        console.error('Failed to initialize WebR:', error);
+    });
+});
+</script>
 {% endblock %}

@@ -533,7 +533,8 @@ class ConversationService:
                 timestamp=datetime.now(),
                 data={
                     'message_id': str(user_message.id),
-                    'content': content
+                    'content': content,
+                    'message_type': message_type
                 }
             )
             
