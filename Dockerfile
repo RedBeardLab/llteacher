@@ -50,10 +50,13 @@ RUN useradd --create-home --shell /bin/bash app && \
     mkdir -p /app/staticfiles /data && \
     chown -R app:app /app/staticfiles /data
 
-USER app
-
-# Collect static files
+# Collect static files as root first (before switching to app user)
 RUN uv run python manage.py collectstatic --noinput
+
+# Ensure proper ownership of static files
+RUN chown -R app:app /app/staticfiles
+
+USER app
 
 # Expose port
 EXPOSE 8000
