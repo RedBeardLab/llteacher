@@ -114,7 +114,7 @@ docker start llteacher-app
 
 - **Base Image**: Python 3.12 slim
 - **Package Manager**: UV for fast dependency management
-- **Web Server**: Gunicorn with 3 workers
+- **Web Server**: Gunicorn with 8 workers
 - **Database**: SQLite (suitable for small to medium deployments)
 - **Static Files**: Served from `/app/staticfiles`
 - **Workspace Structure**: Supports UV workspace with multiple apps
