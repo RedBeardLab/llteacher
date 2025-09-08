@@ -52,7 +52,7 @@
                     <div class="conversation-container">
                         {% if conversation_data.messages %}
                             {% for message in conversation_data.messages %}
-                            <div class="message-container {{ message.css_class }} mb-3">
+                            <div class="message-container {{ message.css_class }} mb-3" data-message-id="{{ message.id }}">
                                 <div class="message-header">
                                     {% if message.is_from_student %}
                                     <span class="badge bg-primary">Student</span>
@@ -904,44 +904,12 @@ class RealTimeChatClient {
     
     bindRCodeButton(messageId) {
         const button = document.querySelector(`[data-message-id="${messageId}"] .r-run-button`);
-        if (button) {
-            button.addEventListener('click', async () => {
-                if (!window.rExecutionManager) {
-                    console.error('R execution manager not available');
-                    return;
-                }
-                
-                // Get the R code from the message
-                const codeElement = document.querySelector(`[data-message-id="${messageId}"] code.language-r`);
-                if (!codeElement) {
-                    console.error('R code not found for message', messageId);
-                    return;
-                }
-                
-                const code = codeElement.textContent;
-                const outputContainer = document.getElementById(`r-output-${messageId}`);
-                
-                if (!outputContainer) {
-                    console.error('Output container not found for message', messageId);
-                    return;
-                }
-                
-                // Execute the R code
-                try {
-                    await window.rExecutionManager.executeCode(code, outputContainer);
-                } catch (error) {
-                    console.error('Error executing R code:', error);
-                    outputContainer.innerHTML = `
-                        <div class="r-execution-result error">
-                            <div class="r-error">
-                                <i class="bi bi-exclamation-triangle"></i>
-                                <strong>Execution Error:</strong>
-                                <pre><code>Failed to execute R code: ${error.message}</code></pre>
-                            </div>
-                        </div>
-                    `;
-                }
-            });
+        if (button && window.rExecutionManager) {
+            // Use the execution manager's binding system for consistency
+            if (!button.hasAttribute('data-handler-bound')) {
+                window.rExecutionManager.bindButtonClickHandler(button, messageId);
+                button.setAttribute('data-handler-bound', 'true');
+            }
         }
     }
     
@@ -977,13 +945,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const conversationId = '{{ conversation_data.id }}';
     window.chatClient = new RealTimeChatClient(conversationId);
     
-    // Bind existing R code buttons
-    document.querySelectorAll('.r-run-button').forEach(button => {
-        const messageId = button.getAttribute('data-message-id');
-        if (messageId) {
-            window.chatClient.bindRCodeButton(messageId);
-        }
-    });
+    // Note: R code button binding is now handled by the RExecutionManager
+    // when WebR initialization completes to avoid race conditions
 });
 </script>
 {% endblock %}
@@ -1284,6 +1247,66 @@ class RExecutionManager {
         buttons.forEach(button => {
             button.disabled = false;
             button.innerHTML = '<i class="bi bi-play-fill"></i> Run Code';
+            
+            // Ensure click handler is bound for existing buttons
+            const messageId = button.getAttribute('data-message-id');
+            if (messageId && !button.hasAttribute('data-handler-bound')) {
+                this.bindButtonClickHandler(button, messageId);
+                button.setAttribute('data-handler-bound', 'true');
+            }
+        });
+    }
+    
+    bindButtonClickHandler(button, messageId) {
+        button.addEventListener('click', async () => {
+            if (!this.isInitialized) {
+                console.error('WebR not initialized yet');
+                return;
+            }
+            
+            // Get the R code from the message - try multiple selectors
+            let codeElement = document.querySelector(`[data-message-id="${messageId}"] code.language-r`);
+            if (!codeElement) {
+                // Fallback: try without language-r class
+                codeElement = document.querySelector(`[data-message-id="${messageId}"] .r-code-container code`);
+            }
+            if (!codeElement) {
+                // Another fallback: try any code element in the message
+                codeElement = document.querySelector(`[data-message-id="${messageId}"] pre code`);
+            }
+            
+            if (!codeElement) {
+                console.error('R code not found for message', messageId);
+                console.log('Message container:', document.querySelector(`[data-message-id="${messageId}"]`));
+                console.log('All message containers:', document.querySelectorAll('[data-message-id]'));
+                console.log('All code elements:', document.querySelectorAll('code'));
+                console.log('All r-code-containers:', document.querySelectorAll('.r-code-container'));
+                return;
+            }
+            
+            const code = codeElement.textContent;
+            const outputContainer = document.getElementById(`r-output-${messageId}`);
+            
+            if (!outputContainer) {
+                console.error('Output container not found for message', messageId);
+                return;
+            }
+            
+            // Execute the R code
+            try {
+                await this.executeCode(code, outputContainer);
+            } catch (error) {
+                console.error('Error executing R code:', error);
+                outputContainer.innerHTML = `
+                    <div class="r-execution-result error">
+                        <div class="r-error">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Execution Error:</strong>
+                            <pre><code>Failed to execute R code: ${error.message}</code></pre>
+                        </div>
+                    </div>
+                `;
+            }
         });
     }
     
