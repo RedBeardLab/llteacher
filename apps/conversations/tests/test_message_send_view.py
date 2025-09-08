@@ -269,13 +269,13 @@ class MessageSendViewTests(TestCase):
             # Send the message with r_code type
             response = self.client.post(self.student_message_url, {
                 'content': 'print("Hello, R!")',
-                'message_type': 'r_code'
+                'message_type': 'code'
             })
             
             # Check that the service was called with the correct message type
             mock_process_message.assert_called_once()
             args, kwargs = mock_process_message.call_args
-            self.assertEqual(args[0].message_type, 'r_code')
+            self.assertEqual(args[0].message_type, 'code')
             self.assertEqual(kwargs['streaming'], False)
             
             # Check redirect

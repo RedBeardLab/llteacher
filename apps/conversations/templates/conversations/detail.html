@@ -66,7 +66,7 @@
                                     <small class="text-muted">{{ message.timestamp|date:"M d, Y H:i" }}</small>
                                 </div>
                                 <div class="message-content p-3 rounded">
-                                    {% if message.message_type == 'r_code' %}
+                                    {% if message.message_type == 'code' %}
                                     <div class="r-code-container">
                                         <div class="r-code-header">
                                             <span class="r-code-label">
@@ -112,7 +112,7 @@
                                         <div class="form-group mb-0">
                                             <select class="form-control" id="message_type" name="message_type">
                                                 <option value="student">Student Message</option>
-                                                <option value="r_code">R Code</option>
+                                                <option value="code">R Code</option>
                                             </select>
                                         </div>
                                         <button type="submit" class="btn btn-primary">
@@ -762,7 +762,7 @@ class RealTimeChatClient {
     addUserMessage(content, messageId, messageType = 'student') {
         let messageContentHtml;
         
-        if (messageType === 'r_code') {
+        if (messageType === 'code') {
             // Create R code message with run button
             messageContentHtml = `
                 <div class="r-code-container">
@@ -803,7 +803,7 @@ class RealTimeChatClient {
         this.typingIndicator.insertAdjacentHTML('beforebegin', messageHtml);
         
         // If it's R code, bind the run button
-        if (messageType === 'r_code') {
+        if (messageType === 'code') {
             this.bindRCodeButton(messageId);
         }
         
@@ -1044,6 +1044,9 @@ class RExecutionManager {
             
             await this.webR.init();
             
+            // Set up webr::canvas as default graphics device for proper plot capture
+            await this.webR.evalRVoid('options(device=webr::canvas)');
+            
             // Install common packages
             await this.installCommonPackages();
             
@@ -1092,55 +1095,51 @@ class RExecutionManager {
             outputContainer.innerHTML = '';
             this.showExecutionState(outputContainer, 'running');
             
-            // Capture output
-            let output = '';
+            // Use WebR's proper captureR method for output and plot capture
+            const shelter = await new this.webR.Shelter();
+            const result = await shelter.captureR(code);
+            
+            // Process captured output
+            let textOutput = '';
             let hasError = false;
-            let plots = [];
             
-            // Set up output capture
-            await this.webR.evalR(`
-                # Capture text output
-                output_conn <- textConnection("output_text", "w", local = TRUE)
-                sink(output_conn)
-                sink(output_conn, type = "message")
-            `);
+            // Extract text output from captured results
+            if (result.output && result.output.length > 0) {
+                const outputLines = [];
+                for (const item of result.output) {
+                    if (item.type === 'stdout' || item.type === 'stderr') {
+                        outputLines.push(item.data);
+                    } else if (item.type === 'error') {
+                        hasError = true;
+                        // Extract error message from R error object
+                        try {
+                            const errorMsg = await item.data.toString();
+                            outputLines.push(`Error: ${errorMsg}`);
+                        } catch (e) {
+                            outputLines.push('An error occurred during execution');
+                        }
+                    }
+                }
+                textOutput = outputLines.join('\n');
+            }
             
-            try {
-                // Execute the R code
-                const result = await this.webR.evalR(code);
-                
-                // Stop output capture
-                await this.webR.evalR(`
-                    sink(type = "message")
-                    sink()
-                    close(output_conn)
-                `);
-                
-                // Get captured output
-                const capturedOutput = await this.webR.evalR('paste(output_text, collapse = "\\n")');
-                output = await capturedOutput.toString();
-                
-                // Check for plots
-                plots = await this.capturePlots();
-                
-            } catch (error) {
-                hasError = true;
-                output = error.message || 'An error occurred during execution';
-                
-                // Stop output capture even on error
+            // If no output captured but we have a result, try to get the result value
+            if (!textOutput.trim() && result.result && !hasError) {
                 try {
-                    await this.webR.evalR(`
-                        sink(type = "message")
-                        sink()
-                        close(output_conn)
-                    `);
+                    const resultStr = await result.result.toString();
+                    if (resultStr && resultStr.trim() && resultStr !== 'NULL') {
+                        textOutput = resultStr;
+                    }
                 } catch (e) {
-                    // Ignore cleanup errors
+                    // Ignore conversion errors
                 }
             }
             
-            // Display results
-            this.displayResults(outputContainer, output, plots, hasError);
+            // Display results with captured plots
+            this.displayResults(outputContainer, textOutput, result.images || [], hasError);
+            
+            // Clean up shelter
+            shelter.purge();
             
         } catch (error) {
             console.error('R execution error:', error);
@@ -1148,38 +1147,6 @@ class RExecutionManager {
         }
     }
     
-    async capturePlots() {
-        try {
-            // Check if there are any plots in the current device
-            const hasPlots = await this.webR.evalR('length(dev.list()) > 0');
-            if (!await hasPlots.toBoolean()) {
-                return [];
-            }
-            
-            // Get plot as SVG
-            const plotSvg = await this.webR.evalR(`
-                if (length(dev.list()) > 0) {
-                    tmp_file <- tempfile(fileext = ".svg")
-                    svg(tmp_file, width = 8, height = 6)
-                    dev.copy()
-                    dev.off()
-                    readLines(tmp_file)
-                } else {
-                    character(0)
-                }
-            `);
-            
-            const svgContent = await plotSvg.toArray();
-            if (svgContent.length > 0) {
-                return [svgContent.join('\n')];
-            }
-            
-            return [];
-        } catch (error) {
-            console.warn('Failed to capture plots:', error);
-            return [];
-        }
-    }
     
     displayResults(container, output, plots, hasError) {
         container.innerHTML = '';
@@ -1210,7 +1177,7 @@ class RExecutionManager {
                 `;
             }
             
-            // Add plots if present
+            // Add plots if present (ImageBitmap objects from WebR)
             if (plots && plots.length > 0) {
                 resultHtml += `
                     <div class="r-plots">
@@ -1218,13 +1185,28 @@ class RExecutionManager {
                             <i class="bi bi-graph-up"></i>
                             <strong>Plot:</strong>
                         </div>
+                    </div>
                 `;
                 
-                plots.forEach((plot, index) => {
-                    resultHtml += `<div class="r-plot">${plot}</div>`;
-                });
+                // We'll add the ImageBitmap plots after setting the HTML
+                container.innerHTML = resultHtml + '</div>';
                 
-                resultHtml += '</div>';
+                // Now add the ImageBitmap plots as canvas elements
+                const plotsContainer = container.querySelector('.r-plots');
+                plots.forEach((imageBitmap, index) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = imageBitmap.width;
+                    canvas.height = imageBitmap.height;
+                    canvas.className = 'r-plot';
+                    canvas.style.maxWidth = '100%';
+                    canvas.style.height = 'auto';
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(imageBitmap, 0, 0);
+                    
+                    plotsContainer.appendChild(canvas);
+                });
+                return; // Early return since we already set innerHTML
             }
             
             // Show success message if no output
