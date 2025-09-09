@@ -2,6 +2,11 @@
 
 {% block title %}Homeworks{% endblock %}
 
+{% block extra_js %}
+<!-- md-block for markdown rendering -->
+<script type="module" src="https://md-block.verou.me/md-block.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
     <div class="row mb-4">
@@ -43,7 +48,9 @@
                     {% endif %}
                 </div>
                 <div class="card-body">
-                    <p class="card-text">{{ homework.description }}</p>
+                    <div class="card-text">
+                        <md-block untrusted>{{ homework.description }}</md-block>
+                    </div>
                     <div class="d-flex justify-content-between align-items-center">
                         <small class="text-muted">{{ homework.section_count }} Sections</small>
                         <small class="text-muted">Due: {{ homework.due_date|date:"M d, Y" }}</small>

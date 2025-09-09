@@ -2,6 +2,11 @@
 
 {% block title %}{{ data.title }}{% endblock %}
 
+{% block extra_js %}
+<!-- md-block for markdown rendering -->
+<script type="module" src="https://md-block.verou.me/md-block.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
     <!-- Homework Header -->
@@ -32,7 +37,9 @@
             <h5 class="card-title mb-0">Description</h5>
         </div>
         <div class="card-body">
-            <p class="card-text">{{ data.description }}</p>
+            <div class="card-text">
+                <md-block untrusted>{{ data.description }}</md-block>
+            </div>
         </div>
     </div>
 
@@ -53,7 +60,7 @@
                  aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#sectionAccordion">
                 <div class="accordion-body">
                     <div class="mb-3">
-                        {{ section.content|linebreaks }}
+                        <md-block untrusted>{{ section.content }}</md-block>
                     </div>
                     
                     {% if data.user_type == 'student' %}
@@ -101,7 +108,7 @@
                     {% if section.has_solution and data.user_type == 'teacher' %}
                     <div class="alert alert-info mt-3">
                         <h6><i class="bi bi-lightbulb"></i> Solution</h6>
-                        <div>{{ section.solution_content|linebreaks }}</div>
+                        <div><md-block untrusted>{{ section.solution_content }}</md-block></div>
                     </div>
                     {% endif %}
                 </div>
