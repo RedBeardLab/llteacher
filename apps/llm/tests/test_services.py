@@ -33,7 +33,7 @@ class LLMServiceTestCase(TestCase):
             api_key="test-api-key-12345",
             base_prompt="You are a helpful AI tutor.",
             temperature=0.7,
-            max_tokens=1000,
+            max_completion_tokens=1000,
             is_default=True,
             is_active=True
         )
@@ -63,7 +63,7 @@ class TestLLMServiceConfig(LLMServiceTestCase):
             api_key="new-test-api-key-67890",
             base_prompt="You are a new AI tutor.",
             temperature=0.5,
-            max_tokens=2000,
+            max_completion_tokens=2000,
             is_default=False,
             is_active=True
         )

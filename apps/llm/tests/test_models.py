@@ -15,7 +15,7 @@ class LLMConfigModelTest(TestCase):
             'api_key': 'test-api-key-12345',
             'base_prompt': 'You are a helpful AI tutor.',
             'temperature': 0.7,
-            'max_tokens': 1000,
+            'max_completion_tokens': 1000,
             'is_default': False,
             'is_active': True
         }
@@ -28,7 +28,7 @@ class LLMConfigModelTest(TestCase):
         self.assertEqual(config.api_key, 'test-api-key-12345')
         self.assertEqual(config.base_prompt, 'You are a helpful AI tutor.')
         self.assertEqual(config.temperature, 0.7)
-        self.assertEqual(config.max_tokens, 1000)
+        self.assertEqual(config.max_completion_tokens, 1000)
         self.assertFalse(config.is_default)
         self.assertTrue(config.is_active)
     
@@ -64,7 +64,7 @@ class LLMConfigModelTest(TestCase):
             base_prompt='Basic prompt'
         )
         self.assertEqual(config.temperature, 0.7)
-        self.assertEqual(config.max_tokens, 1000)
+        self.assertEqual(config.max_completion_tokens, 1000)
         self.assertFalse(config.is_default)
         self.assertTrue(config.is_active)
     
@@ -148,40 +148,40 @@ class LLMConfigValidationTest(TestCase):
             )
             config.full_clean()
     
-    def test_max_tokens_positive_integer(self):
-        """Test max_tokens accepts positive integers."""
+    def test_max_completion_tokens_positive_integer(self):
+        """Test max_completion_tokens accepts positive integers."""
         config = LLMConfig.objects.create(
             **self.base_data,
-            max_tokens=500
+            max_completion_tokens=500
         )
-        self.assertEqual(config.max_tokens, 500)
+        self.assertEqual(config.max_completion_tokens, 500)
     
-    def test_max_tokens_zero_raises_error(self):
-        """Test max_tokens zero raises error."""
+    def test_max_completion_tokens_zero_raises_error(self):
+        """Test max_completion_tokens zero raises error."""
         # PositiveIntegerField allows 0, so this test should pass
         config = LLMConfig(
             **self.base_data,
-            max_tokens=0
+            max_completion_tokens=0
         )
         config.full_clean()  # This should not raise an error
-        self.assertEqual(config.max_tokens, 0)
+        self.assertEqual(config.max_completion_tokens, 0)
     
-    def test_max_tokens_negative_raises_error(self):
-        """Test max_tokens negative raises error."""
+    def test_max_completion_tokens_negative_raises_error(self):
+        """Test max_completion_tokens negative raises error."""
         with self.assertRaises(ValidationError):
             config = LLMConfig(
                 **self.base_data,
-                max_tokens=-100
+                max_completion_tokens=-100
             )
             config.full_clean()
     
-    def test_max_tokens_large_value(self):
-        """Test max_tokens accepts large values."""
+    def test_max_completion_tokens_large_value(self):
+        """Test max_completion_tokens accepts large values."""
         config = LLMConfig.objects.create(
             **self.base_data,
-            max_tokens=10000
+            max_completion_tokens=10000
         )
-        self.assertEqual(config.max_tokens, 10000)
+        self.assertEqual(config.max_completion_tokens, 10000)
 
 
 class LLMConfigDefaultBehaviorTest(TestCase):

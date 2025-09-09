@@ -14,7 +14,7 @@ class LLMConfig(models.Model):
         default=0.7, 
         validators=[MinValueValidator(0.0), MaxValueValidator(2.0)]
     )
-    max_tokens = models.PositiveIntegerField(default=1000)
+    max_completion_tokens = models.PositiveIntegerField(default=1000)
     is_default = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

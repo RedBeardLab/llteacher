@@ -131,7 +131,7 @@ class Command(BaseCommand):
 Be encouraging, ask guiding questions, and help students discover solutions rather than giving direct answers.
 Always be patient and supportive.''',
             temperature=0.7,
-            max_tokens=1000,
+            max_completion_tokens=1000,
             is_default=True,
             is_active=True
         )

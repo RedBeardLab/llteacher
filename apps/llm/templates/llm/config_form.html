@@ -78,10 +78,10 @@
                             
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="max_tokens" class="form-label">Max Tokens</label>
-                                    <input type="number" class="form-control" id="max_tokens" name="max_tokens" 
+                                    <label for="max_completion_tokens" class="form-label">Max Completion Tokens</label>
+                                    <input type="number" class="form-control" id="max_completion_tokens" name="max_completion_tokens" 
                                            min="1" max="4000" 
-                                           value="{% if data.config %}{{ data.config.max_tokens }}{% elif form_data %}{{ form_data.max_tokens }}{% else %}1000{% endif %}">
+                                           value="{% if data.config %}{{ data.config.max_completion_tokens }}{% elif form_data %}{{ form_data.max_completion_tokens }}{% else %}1000{% endif %}">
                                     <div class="form-text">Maximum number of tokens in the response</div>
                                 </div>
                             </div>

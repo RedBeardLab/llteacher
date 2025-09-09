@@ -180,7 +180,7 @@ class LLMConfigCreateView(View):
             api_key=request.POST.get('api_key', '').strip(),
             base_prompt=request.POST.get('base_prompt', '').strip(),
             temperature=float(request.POST.get('temperature', 0.7)),
-            max_tokens=int(request.POST.get('max_tokens', 1000)),
+            max_completion_tokens=int(request.POST.get('max_completion_tokens', 1000)),
             is_default=request.POST.get('is_default') == 'on',
             is_active=True
         )
@@ -278,9 +278,9 @@ class LLMConfigEditView(View):
         if temperature:
             data['temperature'] = float(temperature)
             
-        max_tokens = request.POST.get('max_tokens')
-        if max_tokens:
-            data['max_tokens'] = int(max_tokens)
+        max_completion_tokens = request.POST.get('max_completion_tokens')
+        if max_completion_tokens:
+            data['max_completion_tokens'] = int(max_completion_tokens)
         
         data['is_default'] = request.POST.get('is_default') == 'on'
         data['is_active'] = request.POST.get('is_active', 'on') == 'on'

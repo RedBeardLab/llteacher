@@ -47,7 +47,7 @@ class LLMViewsTestCase(TestCase):
             api_key="test-api-key-12345",
             base_prompt="You are a helpful AI tutor.",
             temperature=0.7,
-            max_tokens=1000,
+            max_completion_tokens=1000,
             is_default=True,
             is_active=True
         )
@@ -104,7 +104,7 @@ class TestLLMConfigCreateView(LLMViewsTestCase):
             'api_key': 'new-test-api-key',
             'base_prompt': 'You are a new AI tutor.',
             'temperature': 0.8,
-            'max_tokens': 2000,
+            'max_completion_tokens': 2000,
             'is_default': False,
             'is_active': True
         }
@@ -170,7 +170,7 @@ class TestLLMConfigUpdateView(LLMViewsTestCase):
             'api_key': 'updated-api-key',
             'base_prompt': 'You are an updated AI tutor.',
             'temperature': 0.9,
-            'max_tokens': 1500,
+            'max_completion_tokens': 1500,
             'is_default': True,
             'is_active': True
         }
@@ -212,7 +212,7 @@ class TestLLMConfigDeleteView(LLMViewsTestCase):
             api_key="delete-api-key",
             base_prompt="Delete me.",
             temperature=0.7,
-            max_tokens=1000,
+            max_completion_tokens=1000,
             is_default=False,
             is_active=True
         )

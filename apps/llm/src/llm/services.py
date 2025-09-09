@@ -7,6 +7,7 @@ Following a testable-first approach with typed data contracts.
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, TYPE_CHECKING, Iterator
 from uuid import UUID
+import uuid
 import logging
 
 # Handle imports for type checking
@@ -27,7 +28,7 @@ class LLMConfigData:
     api_key: str
     base_prompt: str
     temperature: float
-    max_tokens: int
+    max_completion_tokens: int
     is_default: bool
     is_active: bool
 
@@ -45,7 +46,7 @@ class LLMConfigCreateData:
     api_key: str
     base_prompt: str
     temperature: float = 0.7
-    max_tokens: int = 1000
+    max_completion_tokens: int = 1000
     is_default: bool = False
     is_active: bool = True
 
@@ -134,12 +135,14 @@ class LLMService:
             if response_result.success:
                 return response_result.response_text
             else:
-                logger.error(f"LLM response generation failed: {response_result.error}")
-                return "I'm sorry, but I couldn't generate a response. Please try again."
+                error_id = uuid.uuid4()
+                logger.error(f"LLM response generation failed [ID: {error_id}]: {response_result.error}")
+                return f"I'm sorry, there was a technical issue. Please contact your administrator with reference ID: {error_id}"
         
         except Exception as e:
-            logger.error(f"Error generating AI response: {str(e)}")
-            return "I'm sorry, but there was an error generating a response. Please try again."
+            error_id = uuid.uuid4()
+            logger.error(f"Error generating AI response [ID: {error_id}]: {str(e)}")
+            return f"I'm sorry, there was a technical issue. Please contact your administrator with reference ID: {error_id}"
     
     @staticmethod
     def _generate_openai_response(llm_config: 'LLMConfig', context: ConversationContext) -> LLMResponseResult:
@@ -178,7 +181,7 @@ class LLMService:
                 model=llm_config.model_name,
                 messages=messages,
                 temperature=llm_config.temperature,
-                max_tokens=llm_config.max_tokens
+                max_completion_tokens=llm_config.max_completion_tokens
             )
             
             # Extract response
@@ -245,8 +248,9 @@ class LLMService:
             yield from LLMService._generate_streaming_openai_response(llm_config, context)
         
         except Exception as e:
-            logger.error(f"Error generating streaming AI response: {str(e)}")
-            yield "I'm sorry, but there was an error generating a response. Please try again."
+            error_id = uuid.uuid4()
+            logger.error(f"Error generating streaming AI response [ID: {error_id}]: {str(e)}")
+            yield f"I'm sorry, there was a technical issue. Please contact your administrator with reference ID: {error_id}"
     
     @staticmethod
     def _generate_streaming_openai_response(llm_config: 'LLMConfig', context: ConversationContext) -> Iterator[str]:
@@ -285,7 +289,7 @@ class LLMService:
                 model=llm_config.model_name,
                 messages=messages,
                 temperature=llm_config.temperature,
-                max_tokens=llm_config.max_tokens,
+                max_completion_tokens=llm_config.max_completion_tokens,
                 stream=True  # Enable streaming
             )
             
@@ -295,10 +299,12 @@ class LLMService:
                     delta = chunk.choices[0].delta
                     if hasattr(delta, 'content') and delta.content:
                         yield delta.content
+
         
         except Exception as e:
-            logger.error(f"OpenAI streaming API error: {str(e)}")
-            yield f"Error: {str(e)}"
+            error_id = uuid.uuid4()
+            logger.error(f"OpenAI streaming API error [ID: {error_id}]: {str(e)}")
+            yield f"I'm sorry, there was a technical issue. Please contact your administrator with reference ID: {error_id}"
     
     @staticmethod
     def _build_conversation_context(conversation: 'Conversation', content: str, message_type: str) -> ConversationContext:
@@ -384,7 +390,7 @@ class LLMService:
                 api_key=config.api_key,
                 base_prompt=config.base_prompt,
                 temperature=config.temperature,
-                max_tokens=config.max_tokens,
+                max_completion_tokens=config.max_completion_tokens,
                 is_default=config.is_default,
                 is_active=config.is_active
             )
@@ -417,7 +423,7 @@ class LLMService:
                 api_key=config.api_key,
                 base_prompt=config.base_prompt,
                 temperature=config.temperature,
-                max_tokens=config.max_tokens,
+                max_completion_tokens=config.max_completion_tokens,
                 is_default=config.is_default,
                 is_active=config.is_active
             )
@@ -448,7 +454,7 @@ class LLMService:
                     api_key=config.api_key,
                     base_prompt=config.base_prompt,
                     temperature=config.temperature,
-                    max_tokens=config.max_tokens,
+                    max_completion_tokens=config.max_completion_tokens,
                     is_default=config.is_default,
                     is_active=config.is_active
                 ) for config in configs
@@ -478,7 +484,7 @@ class LLMService:
                 api_key=data.api_key,
                 base_prompt=data.base_prompt,
                 temperature=data.temperature,
-                max_tokens=data.max_tokens,
+                max_completion_tokens=data.max_completion_tokens,
                 is_default=data.is_default,
                 is_active=data.is_active
             )
@@ -523,8 +529,8 @@ class LLMService:
                 config.base_prompt = data['base_prompt']
             if 'temperature' in data:
                 config.temperature = data['temperature']
-            if 'max_tokens' in data:
-                config.max_tokens = data['max_tokens']
+            if 'max_completion_tokens' in data:
+                config.max_completion_tokens = data['max_completion_tokens']
             if 'is_default' in data:
                 config.is_default = data['is_default']
             if 'is_active' in data:
