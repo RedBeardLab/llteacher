@@ -353,7 +353,8 @@ class HomeworkSubmissionsServiceTest(TestCase):
         for student_summary in result.students:
             self.assertEqual(student_summary.participation_status, ParticipationStatus.NO_INTERACTION)
             self.assertFalse(student_summary.has_interactions)
-            self.assertEqual(len(student_summary.conversations), 0)
+            self.assertEqual(student_summary.total_conversations, 0)
+            self.assertEqual(student_summary.missing_sections, 2)  # Both sections are missing
     
     def test_get_homework_submissions_with_interactions(self):
         """Test get_homework_submissions with student interactions."""
@@ -398,13 +399,17 @@ class HomeworkSubmissionsServiceTest(TestCase):
         self.assertEqual(student1_summary.participation_status, ParticipationStatus.ACTIVE)
         self.assertTrue(student1_summary.has_interactions)
         self.assertEqual(student1_summary.submitted_count, 1)
-        self.assertEqual(len(student1_summary.conversations), 1)
+        self.assertEqual(student1_summary.total_conversations, 1)
+        self.assertEqual(student1_summary.sections_started, 1)
+        self.assertEqual(student1_summary.missing_sections, 1)  # Missing section 2
         
         # Check student2 (partial - has conversation but no submission)
         self.assertEqual(student2_summary.participation_status, ParticipationStatus.PARTIAL)
         self.assertTrue(student2_summary.has_interactions)
         self.assertEqual(student2_summary.submitted_count, 0)
-        self.assertEqual(len(student2_summary.conversations), 1)
+        self.assertEqual(student2_summary.total_conversations, 1)
+        self.assertEqual(student2_summary.sections_started, 1)
+        self.assertEqual(student2_summary.missing_sections, 1)  # Missing section 2
     
     def test_get_homework_submissions_includes_soft_deleted(self):
         """Test that get_homework_submissions includes soft-deleted conversations."""
@@ -426,11 +431,15 @@ class HomeworkSubmissionsServiceTest(TestCase):
         
         student1_summary = next(s for s in result.students if s.student_username == 'student1')
         
-        # Should include both conversations
-        self.assertEqual(len(student1_summary.conversations), 2)
+        # Should include both conversations across sections
+        self.assertEqual(student1_summary.total_conversations, 2)
+        self.assertEqual(student1_summary.sections_started, 2)  # Both sections have conversations
+        self.assertEqual(student1_summary.missing_sections, 0)  # No missing sections
         
-        # Check that deleted conversation is marked
-        deleted_conv = next(c for c in student1_summary.conversations if c.is_deleted)
+        # Check that deleted conversation is marked in the appropriate section
+        section2_status = next(s for s in student1_summary.section_statuses if s.section_order == 2)
+        self.assertEqual(len(section2_status.conversations), 1)
+        deleted_conv = section2_status.conversations[0]
         self.assertTrue(deleted_conv.is_deleted)
     
     def test_get_homework_submissions_reverse_chronological_order(self):
@@ -456,10 +465,20 @@ class HomeworkSubmissionsServiceTest(TestCase):
         
         student1_summary = next(s for s in result.students if s.student_username == 'student1')
         
-        # Conversations should be in reverse chronological order (newest first)
-        self.assertEqual(len(student1_summary.conversations), 2)
+        # Should have conversations in both sections
+        self.assertEqual(student1_summary.total_conversations, 2)
+        
+        # Check that conversations within each section are in reverse chronological order
+        # Since we have one conversation per section, we'll check the section ordering
+        section1_status = next(s for s in student1_summary.section_statuses if s.section_order == 1)
+        section2_status = next(s for s in student1_summary.section_statuses if s.section_order == 2)
+        
+        self.assertEqual(len(section1_status.conversations), 1)
+        self.assertEqual(len(section2_status.conversations), 1)
+        
+        # The newer conversation (section2) should have a later created_at time
         self.assertTrue(
-            student1_summary.conversations[0].created_at > student1_summary.conversations[1].created_at
+            section2_status.conversations[0].created_at > section1_status.conversations[0].created_at
         )
     
     def test_get_homework_submissions_student_sorting(self):

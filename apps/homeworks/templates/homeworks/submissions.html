@@ -112,7 +112,6 @@
             </div>
         </div>
         
-        {% if student.has_interactions %}
         <div class="card-body">
             <div class="row">
                 <div class="col-md-3 mb-3">
@@ -120,55 +119,95 @@
                         <small class="text-muted">Sections Started:</small>
                         <span class="fw-bold">{{ student.sections_started }} / {{ data.total_sections }}</span>
                         
+                        {% if student.missing_sections > 0 %}
+                        <small class="text-danger mt-1">Missing Sections:</small>
+                        <span class="fw-bold text-danger">{{ student.missing_sections }}</span>
+                        {% endif %}
+                        
+                        {% if student.has_interactions %}
                         <small class="text-muted mt-2">Last Activity:</small>
                         <span class="fw-bold">{{ student.last_activity|date:"M d, Y H:i" }}</span>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="col-md-9">
-                    <h6 class="mb-2">Conversations (newest first):</h6>
-                    <div class="conversation-list">
-                        {% for conversation in student.conversations %}
-                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded 
-                                    {% if conversation.is_deleted %}bg-light{% endif %}">
-                            <div class="flex-grow-1">
-                                <div class="d-flex align-items-center gap-2">
-                                    <strong>Section {{ conversation.section_order }}: {{ conversation.section_title }}</strong>
-                                    {% if conversation.is_deleted %}
-                                        <span class="badge bg-secondary">Deleted</span>
-                                    {% endif %}
-                                    {% if conversation.is_submitted %}
-                                        <span class="badge bg-success">
-                                            <i class="bi bi-check-circle"></i> Submitted
+                    <h6 class="mb-2">Section Progress (ordered by section number):</h6>
+                    <div class="section-progress-list">
+                        {% for section_status in student.section_statuses %}
+                        <div class="section-block mb-3 p-3 border rounded 
+                                    {% if section_status.is_missing %}border-danger bg-light-danger{% else %}border-success{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">
+                                    Section {{ section_status.section_order }}: {{ section_status.section_title }}
+                                    {% if section_status.is_missing %}
+                                        <span class="badge bg-danger ms-2">
+                                            <i class="bi bi-exclamation-triangle"></i> Missing
+                                        </span>
+                                    {% elif section_status.submission_count > 0 %}
+                                        <span class="badge bg-success ms-2">
+                                            <i class="bi bi-check-circle"></i> {{ section_status.submission_count }} Submitted
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-info ms-2">
+                                            <i class="bi bi-clock"></i> In Progress
                                         </span>
                                     {% endif %}
-                                </div>
-                                <div class="small text-muted">
-                                    Created: {{ conversation.created_at|date:"M d, Y H:i" }} | 
-                                    Updated: {{ conversation.updated_at|date:"M d, Y H:i" }} | 
-                                    {{ conversation.message_count }} messages
-                                    {% if conversation.submission_date %}
-                                        | Submitted: {{ conversation.submission_date|date:"M d, Y H:i" }}
-                                    {% endif %}
-                                </div>
+                                </h6>
+                                {% if section_status.latest_conversation_date %}
+                                <small class="text-muted">
+                                    Latest: {{ section_status.latest_conversation_date|date:"M d, Y H:i" }}
+                                </small>
+                                {% endif %}
                             </div>
-                            <div class="flex-shrink-0">
-                                <a href="{% url 'conversations:detail' conversation.conversation_id %}" 
-                                   class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-eye"></i> View
-                                </a>
+                            
+                            {% if section_status.is_missing %}
+                            <div class="text-center text-muted py-2">
+                                <i class="bi bi-exclamation-circle"></i>
+                                <em>Student has not started this section</em>
                             </div>
+                            {% else %}
+                            <div class="conversations-in-section">
+                                <small class="text-muted">Conversations ({{ section_status.conversations|length }}):</small>
+                                {% for conversation in section_status.conversations %}
+                                <div class="d-flex justify-content-between align-items-center mt-2 p-2 bg-white border rounded 
+                                            {% if conversation.is_deleted %}bg-light{% endif %}">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="fw-bold">Conversation {{ forloop.counter }}</span>
+                                            {% if conversation.is_deleted %}
+                                                <span class="badge bg-secondary">Deleted</span>
+                                            {% endif %}
+                                            {% if conversation.is_submitted %}
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check-circle"></i> Submitted
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="small text-muted">
+                                            Created: {{ conversation.created_at|date:"M d, Y H:i" }} | 
+                                            Updated: {{ conversation.updated_at|date:"M d, Y H:i" }} | 
+                                            {{ conversation.message_count }} messages
+                                            {% if conversation.submission_date %}
+                                                | Submitted: {{ conversation.submission_date|date:"M d, Y H:i" }}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="flex-shrink-0">
+                                        <a href="{% url 'conversations:detail' conversation.conversation_id %}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
                 </div>
             </div>
         </div>
-        {% else %}
-        <div class="card-body text-center text-muted py-4">
-            <i class="bi bi-exclamation-circle fs-1 mb-2"></i>
-            <p class="mb-0">This student has not started any section of this homework.</p>
-        </div>
-        {% endif %}
     </div>
     {% empty %}
     <div class="alert alert-info">
@@ -224,9 +263,27 @@ document.addEventListener('DOMContentLoaded', function() {
     border-left: 4px solid #0dcaf0 !important;
 }
 
-.conversation-list {
-    max-height: 400px;
+.section-progress-list {
+    max-height: 500px;
     overflow-y: auto;
+}
+
+.bg-light-danger {
+    background-color: #f8d7da !important;
+}
+
+.section-block {
+    transition: all 0.2s ease;
+}
+
+.section-block:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.conversations-in-section {
+    border-top: 1px solid #dee2e6;
+    padding-top: 0.5rem;
+    margin-top: 0.5rem;
 }
 </style>
 {% endblock %}
