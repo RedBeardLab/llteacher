@@ -245,18 +245,29 @@ class RExecutionManager {
         let indicator = document.getElementById('webr-loading-indicator');
         
         if (show && !indicator) {
+            // Create a non-blocking toast notification instead of full-screen overlay
             indicator = document.createElement('div');
             indicator.id = 'webr-loading-indicator';
-            indicator.className = 'webr-global-loading';
+            indicator.className = 'toast show position-fixed top-0 end-0 m-3';
+            indicator.style.zIndex = '1050';
             indicator.innerHTML = `
-                <div class="webr-loading-content">
-                    <i class="bi bi-arrow-repeat spin"></i>
-                    <span>Initializing R environment...</span>
+                <div class="toast-header">
+                    <i class="bi bi-arrow-repeat spin text-primary me-2"></i>
+                    <strong class="me-auto">R Environment</strong>
+                </div>
+                <div class="toast-body">
+                    Initializing R environment in the background...
                 </div>
             `;
             document.body.appendChild(indicator);
         } else if (!show && indicator) {
-            indicator.remove();
+            // Fade out the toast
+            indicator.classList.remove('show');
+            setTimeout(() => {
+                if (indicator.parentNode) {
+                    indicator.remove();
+                }
+            }, 300);
         }
     }
     
