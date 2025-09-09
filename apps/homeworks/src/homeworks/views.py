@@ -521,6 +521,44 @@ class HomeworkDetailView(View):
         # Render the template with the data
         return render(request, 'homeworks/detail.html', {'data': data})
     
+    def post(self, request: HttpRequest, homework_id: UUID) -> HttpResponse:
+        """Handle POST requests for homework actions (like deletion)."""
+        # Check if this is a delete action
+        action = request.POST.get('action')
+        
+        if action == 'delete':
+            return self._handle_delete(request, homework_id)
+        
+        # If no valid action, redirect to detail view
+        return redirect('homeworks:detail', homework_id=homework_id)
+    
+    def _handle_delete(self, request: HttpRequest, homework_id: UUID) -> HttpResponse:
+        """Handle homework deletion."""
+        # Check if user is a teacher
+        teacher_profile = getattr(request.user, 'teacher_profile', None)
+        if not teacher_profile:
+            return HttpResponseForbidden("Only teachers can delete homeworks.")
+        
+        # Get the homework and check ownership
+        try:
+            from .models import Homework
+            homework = Homework.objects.get(id=homework_id)
+            if homework.created_by != teacher_profile:
+                return HttpResponseForbidden("You can only delete homeworks you created.")
+        except Homework.DoesNotExist:
+            messages.error(request, "Homework not found.")
+            return redirect('homeworks:list')
+        
+        # Delete the homework using the service
+        success = HomeworkService.delete_homework(homework_id)
+        
+        if success:
+            messages.success(request, f"Homework '{homework.title}' has been deleted successfully.")
+        else:
+            messages.error(request, "Failed to delete homework. Please try again.")
+        
+        return redirect('homeworks:list')
+    
     def _get_view_data(self, user, homework_id: UUID) -> HomeworkDetailData | None:
         """
         Prepare data for the homework detail view based on user type.

@@ -104,7 +104,7 @@
                     </div>
                     
                     <!-- Message input form -->
-                    {% if not conversation_data.is_teacher_test or user.id == conversation_data.user_id %}
+                    {% if user.id == conversation_data.user_id %}
                     <div class="mt-4">
                         <div class="card bg-light">
                             <div class="card-body">
@@ -137,7 +137,7 @@
                             </div>
                         </div>
                     </div>
-                    {% else %}
+                    {% elif conversation_data.is_teacher_test %}
                     <div class="alert alert-info mt-4">
                         <i class="fas fa-info-circle"></i> 
                         You are viewing this conversation as a teacher and cannot send messages.
