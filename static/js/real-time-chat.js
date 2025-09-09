@@ -18,7 +18,7 @@ class RealTimeChatClient {
         this.form = document.getElementById('message-form');
         this.textarea = document.getElementById('content');
         this.sendButton = this.form.querySelector('button[type="submit"]');
-        this.messageTypeSelect = document.getElementById('message_type');
+        this.messageTypeRadios = this.form.querySelectorAll('input[name="message_type"]');
         this.conversationContainer = document.querySelector('.conversation-container');
         
         // Create typing indicator
@@ -35,6 +35,20 @@ class RealTimeChatClient {
             this.sendMessage();
         });
         
+        // Handle Enter key for sending messages
+        this.textarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (e.shiftKey) {
+                    // Shift+Enter: Allow new line (default behavior)
+                    return;
+                } else {
+                    // Enter: Send message
+                    e.preventDefault();
+                    this.sendMessage();
+                }
+            }
+        });
+        
         // Auto-resize textarea
         this.textarea.addEventListener('input', () => {
             this.textarea.style.height = 'auto';
@@ -44,7 +58,7 @@ class RealTimeChatClient {
     
     async sendMessage() {
         const content = this.textarea.value.trim();
-        const messageType = this.messageTypeSelect.value;
+        const messageType = this.getSelectedMessageType();
         
         if (!content || this.isStreaming) {
             return;
@@ -182,7 +196,7 @@ class RealTimeChatClient {
         }
         
         const messageHtml = `
-            <div class="message-container message-student mb-3" data-message-id="${messageId}">
+            <div class="message-container message-chat mb-3" data-message-id="${messageId}">
                 <div class="message-header">
                     <span class="badge bg-primary">Student</span>
                     <small class="text-muted">${this.formatTimestamp(new Date())}</small>
@@ -264,17 +278,30 @@ class RealTimeChatClient {
         this.scrollToBottom();
     }
     
+    getSelectedMessageType() {
+        for (const radio of this.messageTypeRadios) {
+            if (radio.checked) {
+                return radio.value;
+            }
+        }
+        return 'student'; // Default fallback
+    }
+    
     setLoadingState(loading) {
         this.sendButton.disabled = loading;
         this.textarea.disabled = loading;
-        this.messageTypeSelect.disabled = loading;
+        
+        // Disable/enable radio buttons
+        this.messageTypeRadios.forEach(radio => {
+            radio.disabled = loading;
+        });
         
         if (loading) {
             this.sendButton.classList.add('send-button-loading');
-            this.sendButton.textContent = 'Sending...';
+            this.sendButton.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
         } else {
             this.sendButton.classList.remove('send-button-loading');
-            this.sendButton.textContent = 'Send Message';
+            this.sendButton.innerHTML = '<i class="bi bi-send"></i> Send Message';
         }
     }
     

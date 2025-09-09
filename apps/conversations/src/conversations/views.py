@@ -272,7 +272,7 @@ class ConversationDetailView(View):
             for message in conversation_data.messages:
                 # Assign CSS classes based on message type
                 if message.is_from_student:
-                    message.css_class = "message-student"
+                    message.css_class = "message-chat"
                 elif message.is_from_ai:
                     message.css_class = "message-ai"
                 elif message.is_system_message:

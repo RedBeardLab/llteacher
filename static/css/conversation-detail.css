@@ -8,7 +8,7 @@
     border-radius: 0.25rem;
 }
 
-.message-student .message-content {
+.message-chat .message-content {
     background-color: #e3f2fd;
     border-left: 4px solid #007bff;
 }
@@ -216,4 +216,94 @@ code.output {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Message type selector styling */
+.message-type-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.message-type-selector .form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0;
+}
+
+.message-type-selector .btn-group {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+.message-type-selector .btn {
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border: 1px solid #dee2e6;
+    transition: all 0.15s ease-in-out;
+}
+
+.message-type-selector .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.message-type-selector .btn-check:checked + .btn {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.message-type-selector .btn-check:checked + .btn-outline-success {
+    background-color: var(--bs-success);
+    border-color: var(--bs-success);
+    color: white;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+.message-type-selector .btn i {
+    margin-right: 0.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .d-flex.justify-content-between.align-items-center {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+    
+    .message-type-selector {
+        align-self: center;
+    }
+    
+    .message-type-selector .btn-group {
+        justify-content: center;
+    }
+}
+
+/* Textarea improvements */
+#content {
+    resize: vertical;
+    min-height: 80px;
+    transition: height 0.2s ease;
+}
+
+#content:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Send button improvements */
+.btn-primary[type="submit"] {
+    min-width: 140px;
+    font-weight: 600;
+    transition: all 0.15s ease-in-out;
+}
+
+.btn-primary[type="submit"]:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
 }
