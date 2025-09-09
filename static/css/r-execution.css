@@ -162,41 +162,6 @@
     border-radius: 0.25rem;
 }
 
-/* WebR Global Loading Indicator */
-.webr-global-loading {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-}
-
-.webr-loading-content {
-    background-color: #ffffff;
-    padding: 2rem;
-    border-radius: 0.5rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    text-align: center;
-    min-width: 300px;
-}
-
-.webr-loading-content i {
-    font-size: 2rem;
-    color: #007bff;
-    margin-bottom: 1rem;
-    animation: spin 1s linear infinite;
-}
-
-.webr-loading-content span {
-    display: block;
-    font-weight: 600;
-    color: #495057;
-}
 
 .webr-global-error {
     position: fixed;
@@ -220,10 +185,6 @@
         align-self: flex-end;
     }
     
-    .webr-loading-content {
-        margin: 1rem;
-        min-width: auto;
-    }
     
     .webr-global-error {
         left: 1rem;
