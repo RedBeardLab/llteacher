@@ -250,7 +250,7 @@ class LLMService:
         except Exception as e:
             error_id = uuid.uuid4()
             logger.error(f"Error generating streaming AI response [ID: {error_id}]: {str(e)}")
-            yield f"I'm sorry, there was a technical issue. Please contact your administrator with reference ID: {error_id}"
+            yield f"I'm sorry, there was a technical issue. Please contact your administrator with reference ID: `{error_id}`"
     
     @staticmethod
     def _generate_streaming_openai_response(llm_config: 'LLMConfig', context: ConversationContext) -> Iterator[str]:
@@ -304,7 +304,7 @@ class LLMService:
         except Exception as e:
             error_id = uuid.uuid4()
             logger.error(f"OpenAI streaming API error [ID: {error_id}]: {str(e)}")
-            yield f"I'm sorry, there was a technical issue. Please contact your administrator with reference ID: {error_id}"
+            yield f"I'm sorry, there was a technical issue. Please contact your administrator with reference ID: `{error_id}`"
     
     @staticmethod
     def _build_conversation_context(conversation: 'Conversation', content: str, message_type: str) -> ConversationContext:
