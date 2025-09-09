@@ -54,6 +54,16 @@ class RealTimeChatClient {
             this.textarea.style.height = 'auto';
             this.textarea.style.height = this.textarea.scrollHeight + 'px';
         });
+        
+        // Handle message type changes for R Code styling
+        this.messageTypeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                this.updateTextareaMode();
+            });
+        });
+        
+        // Initialize textarea mode
+        this.updateTextareaMode();
     }
     
     async sendMessage() {
@@ -349,6 +359,20 @@ class RealTimeChatClient {
             hour: '2-digit',
             minute: '2-digit'
         });
+    }
+    
+    updateTextareaMode() {
+        const selectedType = this.getSelectedMessageType();
+        
+        if (selectedType === 'code') {
+            // Switch to R Code mode
+            this.textarea.classList.add('r-code-mode');
+            this.textarea.placeholder = 'Enter your R code here...\n\n# Example:\ndata <- c(1, 2, 3, 4, 5)\nmean(data)';
+        } else {
+            // Switch to regular chat mode
+            this.textarea.classList.remove('r-code-mode');
+            this.textarea.placeholder = 'Type your message here... (Press Enter to send, Shift+Enter for new line)';
+        }
     }
     
     escapeHtml(text) {

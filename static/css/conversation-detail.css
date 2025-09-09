@@ -307,3 +307,19 @@ code.output {
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
 }
+
+/* R Code mode styling */
+#content.r-code-mode {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    background-color: #f8f9fa;
+    border: 2px solid #28a745;
+    tab-size: 2;
+    -moz-tab-size: 2;
+}
+
+#content.r-code-mode::placeholder {
+    color: #6c757d;
+    font-style: italic;
+}
