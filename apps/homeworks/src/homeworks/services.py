@@ -7,7 +7,7 @@ Following a testable-first approach with typed data contracts.
 from dataclasses import dataclass
 from typing import Any, List
 from uuid import UUID
-from enum import Enum
+from enum import Enum, StrEnum
 from datetime import datetime
 from django.db import transaction
 
@@ -25,6 +25,13 @@ class SectionStatus(str, Enum):
     IN_PROGRESS_OVERDUE = 'in_progress_overdue'
     SUBMITTED = 'submitted'
     OVERDUE = 'overdue'
+
+
+class ParticipationStatus(StrEnum):
+    """Enumeration of possible student participation status values."""
+    NO_INTERACTION = 'no_interaction'
+    PARTIAL = 'partial'
+    ACTIVE = 'active'
 
 # Data Contracts
 @dataclass
@@ -107,6 +114,51 @@ class HomeworkUpdateResult:
     updated_section_ids: list[UUID] | None = None
     created_section_ids: list[UUID] | None = None
     deleted_section_ids: list[UUID] | None = None
+
+
+# New data contracts for submissions view
+@dataclass
+class StudentConversationData:
+    """Data structure for a student's conversation in the submissions view."""
+    conversation_id: UUID
+    section_title: str
+    section_order: int
+    created_at: datetime
+    updated_at: datetime
+    message_count: int
+    is_submitted: bool
+    is_deleted: bool
+    submission_date: datetime | None
+
+
+@dataclass
+class StudentSubmissionSummary:
+    """Data structure for a student's overall submission summary."""
+    student_id: UUID
+    student_name: str
+    student_username: str
+    student_email: str
+    has_interactions: bool
+    conversations: list[StudentConversationData]
+    total_conversations: int
+    submitted_count: int
+    sections_started: int
+    last_activity: datetime | None
+    participation_status: ParticipationStatus
+
+
+@dataclass
+class HomeworkSubmissionsData:
+    """Data structure for the homework submissions view."""
+    homework_id: UUID
+    homework_title: str
+    homework_due_date: datetime
+    total_sections: int
+    students: list[StudentSubmissionSummary]
+    total_students: int
+    active_students: int
+    inactive_students: int
+    total_submissions: int
 
 class HomeworkService:
     """
@@ -461,3 +513,150 @@ class HomeworkService:
             return False
         except Exception:
             return False
+    
+    @staticmethod
+    def get_homework_submissions(homework_id: UUID) -> HomeworkSubmissionsData | None:
+        """
+        Get all student submissions for a homework, including students with no interactions.
+        
+        Args:
+            homework_id: UUID of the homework to get submissions for
+            
+        Returns:
+            HomeworkSubmissionsData with all students and their interactions, or None if homework not found
+        """
+        from .models import Homework
+        from accounts.models import Student
+        from conversations.models import Conversation, Submission
+        
+        try:
+            # Get the homework
+            homework = Homework.objects.select_related('created_by').prefetch_related('sections').get(id=homework_id)
+            
+            # Get all students in the system
+            all_students = Student.objects.select_related('user').all()
+            
+            # Get all conversations for this homework (including soft-deleted ones)
+            conversations = Conversation.objects.filter(
+                section__homework=homework
+            ).select_related(
+                'user__student_profile', 'section'
+            ).prefetch_related('messages').order_by('-created_at')
+            
+            # Get all submissions for this homework
+            submissions = Submission.objects.filter(
+                conversation__section__homework=homework
+            ).select_related('conversation')
+            
+            # Create a map of conversation_id -> submission for quick lookup
+            submission_map = {sub.conversation.id: sub for sub in submissions}
+            
+            # Group conversations by student
+            student_conversations_map = {}
+            for conv in conversations:
+                student_id = conv.user.student_profile.id
+                if student_id not in student_conversations_map:
+                    student_conversations_map[student_id] = []
+                student_conversations_map[student_id].append(conv)
+            
+            # Create student summaries
+            student_summaries = []
+            total_submissions = 0
+            active_students = 0
+            
+            for student in all_students:
+                conversations_list = student_conversations_map.get(student.id, [])
+                has_interactions = len(conversations_list) > 0
+                
+                # Format conversation data
+                conversation_data = []
+                submitted_count = 0
+                sections_started = set()
+                last_activity = None
+                
+                for conv in conversations_list:
+                    # Check if this conversation has a submission
+                    submission = submission_map.get(conv.id)
+                    is_submitted = submission is not None
+                    if is_submitted:
+                        submitted_count += 1
+                        total_submissions += 1
+                    
+                    # Track sections started
+                    sections_started.add(conv.section.id)
+                    
+                    # Track last activity
+                    if last_activity is None or conv.updated_at > last_activity:
+                        last_activity = conv.updated_at
+                    
+                    conversation_data.append(StudentConversationData(
+                        conversation_id=conv.id,
+                        section_title=conv.section.title,
+                        section_order=conv.section.order,
+                        created_at=conv.created_at,
+                        updated_at=conv.updated_at,
+                        message_count=conv.message_count,
+                        is_submitted=is_submitted,
+                        is_deleted=conv.is_deleted,
+                        submission_date=submission.submitted_at if submission else None
+                    ))
+                
+                # Sort conversations by creation date (newest first)
+                conversation_data.sort(key=lambda x: x.created_at, reverse=True)
+                
+                # Determine participation status
+                if not has_interactions:
+                    participation_status = ParticipationStatus.NO_INTERACTION
+                elif submitted_count > 0:
+                    participation_status = ParticipationStatus.ACTIVE
+                    active_students += 1
+                else:
+                    participation_status = ParticipationStatus.PARTIAL
+                    active_students += 1
+                
+                # Create student summary
+                student_name = f"{student.user.first_name} {student.user.last_name}".strip()
+                if not student_name:
+                    student_name = student.user.username
+                
+                student_summaries.append(StudentSubmissionSummary(
+                    student_id=student.id,
+                    student_name=student_name,
+                    student_username=student.user.username,
+                    student_email=student.user.email,
+                    has_interactions=has_interactions,
+                    conversations=conversation_data,
+                    total_conversations=len(conversations_list),
+                    submitted_count=submitted_count,
+                    sections_started=len(sections_started),
+                    last_activity=last_activity,
+                    participation_status=participation_status
+                ))
+            
+            # Sort students: no_interaction first (with warnings), then by last activity (newest first)
+            student_summaries.sort(key=lambda s: (
+                s.participation_status != ParticipationStatus.NO_INTERACTION,  # False sorts first
+                -(s.last_activity or datetime.min).timestamp() if s.last_activity else 0  # Negative for reverse order
+            ))
+            
+            # Calculate statistics
+            total_students = len(all_students)
+            inactive_students = total_students - active_students
+            total_sections = homework.sections.count()
+            
+            return HomeworkSubmissionsData(
+                homework_id=homework.id,
+                homework_title=homework.title,
+                homework_due_date=homework.due_date,
+                total_sections=total_sections,
+                students=student_summaries,
+                total_students=total_students,
+                active_students=active_students,
+                inactive_students=inactive_students,
+                total_submissions=total_submissions
+            )
+            
+        except Homework.DoesNotExist:
+            return None
+        except Exception:
+            return None

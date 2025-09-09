@@ -107,6 +107,11 @@
                     <a href="{% url 'homeworks:detail' homework.id %}" class="btn btn-primary">
                         {% if data.user_type == 'teacher' %}View & Edit{% else %}Start Working{% endif %}
                     </a>
+                    {% if data.user_type == 'teacher' %}
+                    <a href="{% url 'homeworks:submissions' homework.id %}" class="btn btn-outline-info ms-2">
+                        <i class="bi bi-people"></i> Submissions
+                    </a>
+                    {% endif %}
                 </div>
             </div>
         </div>

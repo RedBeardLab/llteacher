@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}{{ data.homework_title }} - Submissions{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Homework Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h1>{{ data.homework_title }} - Submissions</h1>
+            <p class="text-muted">Due: {{ data.homework_due_date|date:"F d, Y" }} | {{ data.total_sections }} sections</p>
+        </div>
+        <div class="text-end">
+            <a href="{% url 'homeworks:detail' data.homework_id %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Homework
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert for non-participating students -->
+    {% if data.inactive_students > 0 %}
+    <div class="alert alert-warning mb-4">
+        <h5><i class="bi bi-exclamation-triangle"></i> {{ data.inactive_students }} Student(s) Not Participating</h5>
+        <p class="mb-0">{{ data.inactive_students }} out of {{ data.total_students }} students have not started this homework.</p>
+    </div>
+    {% endif %}
+
+    <!-- Summary Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="mb-1">{{ data.total_students }}</h5>
+                    <small class="text-muted">Total Students</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="text-success mb-1">{{ data.active_students }}</h5>
+                    <small class="text-muted">Participating</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="text-warning mb-1">{{ data.inactive_students }}</h5>
+                    <small class="text-muted">Not Started</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="text-info mb-1">{{ data.total_submissions }}</h5>
+                    <small class="text-muted">Submissions</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Options -->
+    <div class="mb-3">
+        <div class="btn-group" role="group" aria-label="Filter students">
+            <input type="radio" class="btn-check" name="filter" id="filter-all" autocomplete="off" checked>
+            <label class="btn btn-outline-primary" for="filter-all">All Students</label>
+
+            <input type="radio" class="btn-check" name="filter" id="filter-no-interaction" autocomplete="off">
+            <label class="btn btn-outline-warning" for="filter-no-interaction">No Interaction Only</label>
+
+            <input type="radio" class="btn-check" name="filter" id="filter-active" autocomplete="off">
+            <label class="btn btn-outline-success" for="filter-active">Active Only</label>
+        </div>
+    </div>
+
+    <!-- Student Cards -->
+    {% for student in data.students %}
+    <div class="card mb-3 student-card {% if student.participation_status == 'no_interaction' %}border-warning no-interaction{% elif student.participation_status == 'active' %}active{% else %}partial{% endif %}" 
+         data-participation="{{ student.participation_status }}">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="mb-0">
+                    {{ student.student_name }} 
+                    <small class="text-muted">({{ student.student_username }})</small>
+                </h6>
+                <small class="text-muted">{{ student.student_email }}</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <!-- Participation Status Badge -->
+                {% if student.participation_status == 'no_interaction' %}
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-exclamation-triangle"></i> No Interaction
+                    </span>
+                {% elif student.participation_status == 'partial' %}
+                    <span class="badge bg-info">
+                        <i class="bi bi-clock"></i> Partial Progress
+                    </span>
+                {% else %}
+                    <span class="badge bg-success">
+                        <i class="bi bi-check-circle"></i> Active
+                    </span>
+                {% endif %}
+
+                <!-- Quick Stats -->
+                <small class="text-muted">
+                    {% if student.has_interactions %}
+                        {{ student.total_conversations }} conv. | {{ student.submitted_count }} submitted
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+        
+        {% if student.has_interactions %}
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <div class="d-flex flex-column gap-1">
+                        <small class="text-muted">Sections Started:</small>
+                        <span class="fw-bold">{{ student.sections_started }} / {{ data.total_sections }}</span>
+                        
+                        <small class="text-muted mt-2">Last Activity:</small>
+                        <span class="fw-bold">{{ student.last_activity|date:"M d, Y H:i" }}</span>
+                    </div>
+                </div>
+                <div class="col-md-9">
+                    <h6 class="mb-2">Conversations (newest first):</h6>
+                    <div class="conversation-list">
+                        {% for conversation in student.conversations %}
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded 
+                                    {% if conversation.is_deleted %}bg-light{% endif %}">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2">
+                                    <strong>Section {{ conversation.section_order }}: {{ conversation.section_title }}</strong>
+                                    {% if conversation.is_deleted %}
+                                        <span class="badge bg-secondary">Deleted</span>
+                                    {% endif %}
+                                    {% if conversation.is_submitted %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i> Submitted
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <div class="small text-muted">
+                                    Created: {{ conversation.created_at|date:"M d, Y H:i" }} | 
+                                    Updated: {{ conversation.updated_at|date:"M d, Y H:i" }} | 
+                                    {{ conversation.message_count }} messages
+                                    {% if conversation.submission_date %}
+                                        | Submitted: {{ conversation.submission_date|date:"M d, Y H:i" }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <a href="{% url 'conversations:detail' conversation.conversation_id %}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card-body text-center text-muted py-4">
+            <i class="bi bi-exclamation-circle fs-1 mb-2"></i>
+            <p class="mb-0">This student has not started any section of this homework.</p>
+        </div>
+        {% endif %}
+    </div>
+    {% empty %}
+    <div class="alert alert-info">
+        <h5><i class="bi bi-info-circle"></i> No Students Found</h5>
+        <p class="mb-0">There are no students in the system yet.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Filter functionality
+    const filterButtons = document.querySelectorAll('input[name="filter"]');
+    const studentCards = document.querySelectorAll('.student-card');
+    
+    filterButtons.forEach(button => {
+        button.addEventListener('change', function() {
+            const filter = this.id.replace('filter-', '');
+            
+            studentCards.forEach(card => {
+                const participation = card.dataset.participation;
+                let show = false;
+                
+                switch(filter) {
+                    case 'all':
+                        show = true;
+                        break;
+                    case 'no-interaction':
+                        show = participation === 'no_interaction';
+                        break;
+                    case 'active':
+                        show = participation === 'active';
+                        break;
+                }
+                
+                card.style.display = show ? 'block' : 'none';
+            });
+        });
+    });
+});
+</script>
+
+<style>
+.student-card.no-interaction {
+    border-left: 4px solid #ffc107 !important;
+}
+
+.student-card.active {
+    border-left: 4px solid #198754 !important;
+}
+
+.student-card.partial {
+    border-left: 4px solid #0dcaf0 !important;
+}
+
+.conversation-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+</style>
+{% endblock %}

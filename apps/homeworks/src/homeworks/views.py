@@ -20,7 +20,7 @@ from django.contrib import messages
 from llteacher.permissions.decorators import teacher_required
 
 from .models import Homework, Section
-from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData, SectionStatus, SectionData
+from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData, SectionStatus, SectionData, HomeworkSubmissionsData
 from .forms import HomeworkForm, SectionForm, SectionFormSet
 
 
@@ -781,3 +781,42 @@ class SectionDetailView(View):
             is_teacher=is_teacher,
             is_student=is_student
         )
+
+
+class HomeworkSubmissionsView(View):
+    """
+    View for displaying all student submissions for a homework assignment.
+    
+    Teacher-only view that shows:
+    - All students in the system (including those with no interactions)
+    - For each student: all conversations in reverse chronological order
+    - Submission status and warning indicators for non-participating students
+    - Includes soft-deleted conversations
+    """
+    
+    @method_decorator(login_required, name='dispatch')
+    @method_decorator(teacher_required, name='dispatch')
+    def dispatch(self, *args, **kwargs):
+        """Ensure user is a logged-in teacher."""
+        return super().dispatch(*args, **kwargs)
+    
+    def get(self, request: HttpRequest, homework_id: UUID) -> HttpResponse:
+        """Handle GET requests to display homework submissions."""
+        # Get the homework and check ownership
+        try:
+            homework = Homework.objects.get(id=homework_id)
+            if homework.created_by != request.user.teacher_profile:
+                return HttpResponseForbidden("You can only view submissions for homeworks you created.")
+        except Homework.DoesNotExist:
+            messages.error(request, "Homework not found.")
+            return redirect('homeworks:list')
+        
+        # Get submissions data using service
+        submissions_data = HomeworkService.get_homework_submissions(homework_id)
+        
+        if submissions_data is None:
+            messages.error(request, "Unable to load submissions data.")
+            return redirect('homeworks:detail', homework_id=homework_id)
+        
+        # Render the template with the data
+        return render(request, 'homeworks/submissions.html', {'data': submissions_data})

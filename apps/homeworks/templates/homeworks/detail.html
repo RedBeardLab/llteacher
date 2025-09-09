@@ -26,6 +26,9 @@
                 <a href="{% url 'homeworks:edit' data.id %}" class="btn btn-outline-primary">
                     <i class="bi bi-pencil"></i> Edit
                 </a>
+                <a href="{% url 'homeworks:submissions' data.id %}" class="btn btn-outline-info ms-2">
+                    <i class="bi bi-people"></i> View Submissions
+                </a>
             </div>
             {% endif %}
         </div>
