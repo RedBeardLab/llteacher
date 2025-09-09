@@ -23,6 +23,8 @@ uv run python run_tests.py --settings=src.llteacher.test_settings apps.homeworks
 
 The test runner uses the test settings module located at `src.llteacher.test_settings` which provides optimized test settings including an in-memory database for faster tests.
 
+To run the code in testing mode we can use `--settings=src.llteacher.settings` instead.
+
 ## Missing Views to Implement
 
 ### Homeworks App
