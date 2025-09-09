@@ -115,4 +115,3 @@ cython_debug/
 
 # Django specific
 staticfiles/
-static/
