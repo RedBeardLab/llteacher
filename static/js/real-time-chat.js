@@ -3,8 +3,9 @@
  * Handles streaming chat functionality with AI tutors
  */
 class RealTimeChatClient {
-    constructor(conversationId) {
+    constructor(conversationId, csrfToken) {
         this.conversationId = conversationId;
+        this.csrfToken = csrfToken;
         this.eventSource = null;
         this.isStreaming = false;
         this.currentStreamingMessage = null;
@@ -80,7 +81,7 @@ class RealTimeChatClient {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': this.getCSRFToken()
+                    'X-CSRFToken': this.csrfToken
                 },
                 body: JSON.stringify({
                     content: content,
@@ -329,9 +330,6 @@ class RealTimeChatClient {
         return div.innerHTML;
     }
     
-    getCSRFToken() {
-        return document.querySelector('[name=csrfmiddlewaretoken]').value;
-    }
 }
 
 // Export for use in other modules

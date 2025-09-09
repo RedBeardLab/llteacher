@@ -159,7 +159,8 @@
 <!-- Configuration for JavaScript modules -->
 <script>
 window.conversationConfig = {
-    conversationId: '{{ conversation_data.id }}'
+    conversationId: '{{ conversation_data.id }}',
+    csrfToken: '{{ csrf_token }}'
 };
 </script>
 {% endblock %}
