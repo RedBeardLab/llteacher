@@ -19,7 +19,6 @@ dependencies = [
     "conversations",
     "homeworks",
     "llm",
-    "core",
     "services",
 ]
 
@@ -33,7 +32,6 @@ members = [
     "apps/conversations",
     "apps/homeworks",
     "apps/llm",
-    "core",
     "services"
 ]
 
@@ -42,7 +40,6 @@ accounts = { workspace = true }
 conversations = { workspace = true }
 homeworks = { workspace = true }
 llm = { workspace = true }
-core = { workspace = true }
 services = { workspace = true }
 
 [tool.uv]

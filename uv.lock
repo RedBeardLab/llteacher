@@ -6,7 +6,6 @@ requires-python = ">=3.12"
 members = [
     "accounts",
     "conversations",
-    "core",
     "homeworks",
     "llm",
     "llteacher",
@@ -156,17 +155,6 @@ wheels = [
 name = "conversations"
 version = "1.0.0"
 source = { editable = "apps/conversations" }
-dependencies = [
-    { name = "django" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "django", specifier = ">=5.2.4" }]
-
-[[package]]
-name = "core"
-version = "1.0.0"
-source = { editable = "core" }
 dependencies = [
     { name = "django" },
 ]
@@ -361,7 +349,6 @@ source = { editable = "." }
 dependencies = [
     { name = "accounts" },
     { name = "conversations" },
-    { name = "core" },
     { name = "django" },
     { name = "gunicorn" },
     { name = "homeworks" },
@@ -385,7 +372,6 @@ dev = [
 requires-dist = [
     { name = "accounts", editable = "apps/accounts" },
     { name = "conversations", editable = "apps/conversations" },
-    { name = "core", editable = "core" },
     { name = "django", specifier = ">=5.2.4" },
     { name = "gunicorn" },
     { name = "homeworks", editable = "apps/homeworks" },

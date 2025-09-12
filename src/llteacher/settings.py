@@ -108,3 +108,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom user model
 AUTH_USER_MODEL = 'accounts.User'
+
+# Email domain restrictions for new registrations
+ALLOWED_EMAIL_DOMAINS = ['uw.edu']

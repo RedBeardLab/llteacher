@@ -8,6 +8,8 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.core.exceptions import ValidationError
+from django.conf import settings
+from .utils import is_email_domain_allowed
 
 User = get_user_model()
 
@@ -67,10 +69,21 @@ class RegistrationForm(UserCreationForm):
         self.fields['password2'].help_text = 'Enter the same password as before, for verification.'
     
     def clean_email(self):
-        """Validate that the email is unique."""
+        """Validate that the email is unique and from allowed domain."""
         email = self.cleaned_data.get('email')
+        
+        # Existing uniqueness check
         if User.objects.filter(email=email).exists():
             raise ValidationError('A user with that email already exists.')
+        
+        
+        allowed_domains = getattr(settings, 'ALLOWED_EMAIL_DOMAINS', [])
+        if allowed_domains and email and not is_email_domain_allowed(email, allowed_domains):
+            raise ValidationError(
+                f'Email must be from University of Washington domain (@uw.edu or subdomain). '
+                f'Please use your UW email address.'
+            )
+        
         return email
 
 
@@ -124,6 +137,25 @@ class ProfileForm(forms.ModelForm):
     def clean_email(self):
         """Validate that the email is unique."""
         email = self.cleaned_data.get('email')
+        
+        # Existing uniqueness check
         if email and User.objects.filter(email=email).exclude(pk=self.instance.pk).exists():
             raise ValidationError('A user with that email already exists.')
+        
+        # For profile updates, we'll be more lenient with domain validation
+        # Only enforce domain restrictions if the user is changing to a completely new domain
+        # This grandfathers in existing users with non-UW emails
+        if email and self.instance.email:
+            old_domain = self.instance.email.split('@')[-1].lower()
+            new_domain = email.split('@')[-1].lower()
+            
+            # If they're changing domains (not just the username part), enforce restrictions
+            if old_domain != new_domain:
+                allowed_domains = getattr(settings, 'ALLOWED_EMAIL_DOMAINS', [])
+                if allowed_domains and not is_email_domain_allowed(email, allowed_domains):
+                    raise ValidationError(
+                        f'New email domain must be from University of Washington (@uw.edu or subdomain). '
+                        f'Please use your UW email address.'
+                    )
+        
         return email

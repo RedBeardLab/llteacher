@@ -36,7 +36,7 @@ class UserRegistrationViewTests(TestCase):
         
         data = {
             'username': 'newteacher',
-            'email': 'teacher@example.com',
+            'email': 'teacher@uw.edu',
             'first_name': 'Test',
             'last_name': 'Teacher',
             'password1': 'complex-password-123',
@@ -65,7 +65,7 @@ class UserRegistrationViewTests(TestCase):
         
         data = {
             'username': 'newstudent',
-            'email': 'student@example.com',
+            'email': 'student@uw.edu',
             'first_name': 'Test',
             'last_name': 'Student',
             'password1': 'complex-password-123',

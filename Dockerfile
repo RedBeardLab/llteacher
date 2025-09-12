@@ -29,7 +29,6 @@ COPY pyproject.toml uv.lock README.md ./
 
 # Copy workspace structure - apps and core components
 COPY apps/ ./apps/
-COPY core/ ./core/
 COPY services/ ./services/
 COPY src/ ./src/
 
