@@ -414,13 +414,13 @@ class HomeworkSubmissionsServiceTest(TestCase):
     def test_get_homework_submissions_includes_soft_deleted(self):
         """Test that get_homework_submissions includes soft-deleted conversations."""
         # Create normal conversation
-        conv1 = Conversation.objects.create(
+        _conv1 = Conversation.objects.create(
             user=self.student1_user,
             section=self.section1
         )
         
         # Create soft-deleted conversation
-        conv2 = Conversation.objects.create(
+        _conv2 = Conversation.objects.create(
             user=self.student1_user,
             section=self.section2,
             is_deleted=True,
@@ -485,7 +485,7 @@ class HomeworkSubmissionsServiceTest(TestCase):
         """Test that students are sorted with no_interaction first, then by last activity."""
         # Student1: No interaction
         # Student2: Has interaction
-        conv2 = Conversation.objects.create(
+        _conv2 = Conversation.objects.create(
             user=self.student2_user,
             section=self.section1
         )

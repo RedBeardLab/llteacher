@@ -24,17 +24,6 @@
                         
                         <!-- Basic Fields -->
                         <div class="mb-3">
-                            <label for="{{ form.username.id_for_label }}" class="form-label">Username</label>
-                            {{ form.username }}
-                            {% if form.username.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.username.errors|join:", " }}
-                            </div>
-                            {% endif %}
-                            <div class="form-text">{{ form.username.help_text }}</div>
-                        </div>
-                        
-                        <div class="mb-3">
                             <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
                             {{ form.email }}
                             {% if form.email.errors %}
@@ -89,24 +78,6 @@
                             </div>
                             {% endif %}
                             <div class="form-text">{{ form.password2.help_text }}</div>
-                        </div>
-                        
-                        <!-- Role Selection -->
-                        <div class="mb-4">
-                            <label class="form-label">I am a:</label>
-                            <div class="form-check">
-                                <input type="radio" name="role" value="teacher" id="id_role_0" class="form-check-input" required>
-                                <label for="id_role_0" class="form-check-label">Teacher</label>
-                            </div>
-                            <div class="form-check">
-                                <input type="radio" name="role" value="student" id="id_role_1" class="form-check-input" required>
-                                <label for="id_role_1" class="form-check-label">Student</label>
-                            </div>
-                            {% if form.role.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.role.errors|join:", " }}
-                            </div>
-                            {% endif %}
                         </div>
                         
                         <!-- Submit Button -->

@@ -20,7 +20,7 @@ from django.contrib import messages
 from llteacher.permissions.decorators import teacher_required
 
 from .models import Homework, Section
-from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData, SectionStatus, SectionData, HomeworkSubmissionsData
+from .services import HomeworkService, HomeworkCreateData, HomeworkUpdateData, SectionCreateData, SectionStatus, SectionData
 from .forms import HomeworkForm, SectionForm, SectionFormSet
 
 

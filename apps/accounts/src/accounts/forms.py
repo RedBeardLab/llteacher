@@ -15,12 +15,7 @@ User = get_user_model()
 
 
 class RegistrationForm(UserCreationForm):
-    """Form for user registration with role selection."""
-    
-    ROLE_CHOICES = (
-        ('teacher', 'Teacher'),
-        ('student', 'Student'),
-    )
+    """Form for student registration."""
     
     email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={
         'class': 'form-control',
@@ -37,19 +32,9 @@ class RegistrationForm(UserCreationForm):
         'placeholder': 'Last name'
     }))
     
-    role = forms.ChoiceField(choices=ROLE_CHOICES, required=True, widget=forms.RadioSelect(attrs={
-        'class': 'form-check-input'
-    }))
-    
     class Meta:
         model = User
-        fields = ('username', 'email', 'first_name', 'last_name', 'password1', 'password2', 'role')
-        widgets = {
-            'username': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Username'
-            }),
-        }
+        fields = ('email', 'first_name', 'last_name', 'password1', 'password2')
     
     def __init__(self, *args, **kwargs):
         super(RegistrationForm, self).__init__(*args, **kwargs)
@@ -64,9 +49,17 @@ class RegistrationForm(UserCreationForm):
         })
         
         # Override help_text for better display
-        self.fields['username'].help_text = 'Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.'
         self.fields['password1'].help_text = 'Your password must be at least 8 characters long and not too common.'
         self.fields['password2'].help_text = 'Enter the same password as before, for verification.'
+    
+    def save(self, commit=True):
+        """Save the user with email as username."""
+        user = super().save(commit=False)
+        # Use email as username
+        user.username = self.cleaned_data['email']
+        if commit:
+            user.save()
+        return user
     
     def clean_email(self):
         """Validate that the email is unique and from allowed domain."""
@@ -80,8 +73,8 @@ class RegistrationForm(UserCreationForm):
         allowed_domains = getattr(settings, 'ALLOWED_EMAIL_DOMAINS', [])
         if allowed_domains and email and not is_email_domain_allowed(email, allowed_domains):
             raise ValidationError(
-                f'Email must be from University of Washington domain (@uw.edu or subdomain). '
-                f'Please use your UW email address.'
+                'Email must be from University of Washington domain (@uw.edu or subdomain). '
+                'Please use your UW email address.'
             )
         
         return email
@@ -154,8 +147,8 @@ class ProfileForm(forms.ModelForm):
                 allowed_domains = getattr(settings, 'ALLOWED_EMAIL_DOMAINS', [])
                 if allowed_domains and not is_email_domain_allowed(email, allowed_domains):
                     raise ValidationError(
-                        f'New email domain must be from University of Washington (@uw.edu or subdomain). '
-                        f'Please use your UW email address.'
+                        'New email domain must be from University of Washington (@uw.edu or subdomain). '
+                        'Please use your UW email address.'
                     )
         
         return email

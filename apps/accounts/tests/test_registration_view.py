@@ -31,53 +31,22 @@ class UserRegistrationViewTests(TestCase):
         self.assertTemplateUsed(response, 'accounts/register.html')
         self.assertIsNotNone(response.context['form'])
         
-    def test_register_teacher_success(self):
-        """Test successful teacher registration."""
-        
-        data = {
-            'username': 'newteacher',
-            'email': 'teacher@uw.edu',
-            'first_name': 'Test',
-            'last_name': 'Teacher',
-            'password1': 'complex-password-123',
-            'password2': 'complex-password-123',
-            'role': 'teacher'
-        }
-        
-        response = self.client.post(self.register_url, data)
-        
-        # Check that the user was created
-        self.assertTrue(User.objects.filter(username='newteacher').exists())
-        user = User.objects.get(username='newteacher')
-        
-        # Check that the teacher profile was created
-        self.assertTrue(hasattr(user, 'teacher_profile'))
-        self.assertIsNotNone(user.teacher_profile)
-        
-        # Check that user was redirected somewhere (we don't care where in the test)
-        self.assertEqual(response.status_code, 302)
-        
-        # We can't check messages in the redirected response since we're checking status code
-        # instead of following the redirect in the tests
-    
     def test_register_student_success(self):
         """Test successful student registration."""
         
         data = {
-            'username': 'newstudent',
             'email': 'student@uw.edu',
             'first_name': 'Test',
             'last_name': 'Student',
             'password1': 'complex-password-123',
             'password2': 'complex-password-123',
-            'role': 'student'
         }
         
         response = self.client.post(self.register_url, data)
         
-        # Check that the user was created
-        self.assertTrue(User.objects.filter(username='newstudent').exists())
-        user = User.objects.get(username='newstudent')
+        # Check that the user was created with email as username
+        self.assertTrue(User.objects.filter(username='student@uw.edu').exists())
+        user = User.objects.get(username='student@uw.edu')
         
         # Check that the student profile was created
         self.assertTrue(hasattr(user, 'student_profile'))
@@ -86,37 +55,14 @@ class UserRegistrationViewTests(TestCase):
         # Check that user was redirected somewhere (we don't care where in the test)
         self.assertEqual(response.status_code, 302)
     
-    def test_register_with_duplicate_username(self):
-        """Test registration with a duplicate username fails."""
-        data = {
-            'username': 'existinguser',  # Already exists
-            'email': 'new@example.com',
-            'first_name': 'Test',
-            'last_name': 'User',
-            'password1': 'complex-password-123',
-            'password2': 'complex-password-123',
-            'role': 'student'
-        }
-        
-        response = self.client.post(self.register_url, data)
-        
-        # Check that the form has an error
-        self.assertFalse(response.context['form'].is_valid())
-        self.assertIn('username', response.context['form'].errors)
-        
-        # Check that no new user was created
-        self.assertEqual(User.objects.count(), 1)  # Only the existing user
-    
     def test_register_with_duplicate_email(self):
         """Test registration with a duplicate email fails."""
         data = {
-            'username': 'newuser',
             'email': 'existing@example.com',  # Already exists
             'first_name': 'Test',
             'last_name': 'User',
             'password1': 'complex-password-123',
             'password2': 'complex-password-123',
-            'role': 'student'
         }
         
         response = self.client.post(self.register_url, data)
@@ -131,13 +77,11 @@ class UserRegistrationViewTests(TestCase):
     def test_register_with_password_mismatch(self):
         """Test registration with mismatched passwords fails."""
         data = {
-            'username': 'newuser',
             'email': 'new@example.com',
             'first_name': 'Test',
             'last_name': 'User',
             'password1': 'complex-password-123',
             'password2': 'different-password',  # Doesn't match
-            'role': 'student'
         }
         
         response = self.client.post(self.register_url, data)
@@ -145,28 +89,6 @@ class UserRegistrationViewTests(TestCase):
         # Check that the form has an error
         self.assertFalse(response.context['form'].is_valid())
         self.assertIn('password2', response.context['form'].errors)
-        
-        # Check that no new user was created
-        self.assertEqual(User.objects.count(), 1)  # Only the existing user
-    
-    def test_register_with_invalid_role(self):
-        """Test registration with an invalid role fails."""
-        data = {
-            'username': 'newuser',
-            'email': 'new@example.com',
-            'first_name': 'Test',
-            'last_name': 'User',
-            'password1': 'complex-password-123',
-            'password2': 'complex-password-123',
-            'role': 'invalid'  # Invalid role
-        }
-        
-        response = self.client.post(self.register_url, data)
-        
-        # Check that the form is present in the response (not redirected)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('form', response.context)
-        self.assertFalse(response.context['form'].is_valid())
         
         # Check that no new user was created
         self.assertEqual(User.objects.count(), 1)  # Only the existing user
@@ -189,17 +111,15 @@ class UserRegistrationViewTests(TestCase):
         
         # Test POST request while logged in
         data = {
-            'username': 'shouldnotcreate',
             'email': 'test@example.com',
             'first_name': 'Test',
             'last_name': 'User',
             'password1': 'complex-password-123',
             'password2': 'complex-password-123',
-            'role': 'student'
         }
         
         response = self.client.post(self.register_url, data)
         self.assertEqual(response.status_code, 302)
         
         # Check that no new user was created
-        self.assertFalse(User.objects.filter(username='shouldnotcreate').exists())
+        self.assertFalse(User.objects.filter(username='test@example.com').exists())

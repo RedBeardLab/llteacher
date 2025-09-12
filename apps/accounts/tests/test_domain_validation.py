@@ -5,7 +5,6 @@ This module tests the domain validation for UW email addresses,
 including subdomain support and grandfathering logic.
 """
 from django.test import TestCase
-from django.core.exceptions import ValidationError
 from accounts.forms import RegistrationForm, ProfileForm
 from accounts.models import User
 from accounts.utils import is_email_domain_allowed

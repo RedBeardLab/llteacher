@@ -19,18 +19,16 @@ from django.utils.decorators import method_decorator
 from datetime import datetime
 
 from .forms import RegistrationForm, LoginForm, ProfileForm
-from .models import Teacher, Student, User
+from .models import Student, User
 
 
 @dataclass
 class RegistrationFormData:
     """Data structure for the registration form view."""
-    username: str
     email: str
     password: str
     confirm_password: str
-    role: str  # 'teacher' or 'student'
-    errors: Dict[str, str] = None
+    errors: Dict[str, str] | None = None
 
 
 @dataclass
@@ -47,7 +45,7 @@ class LoginFormData:
     username: str
     password: str
     next_url: Optional[str] = None
-    errors: Dict[str, str] = None
+    errors: Dict[str, str] | None = None
 
 
 @dataclass
@@ -124,7 +122,7 @@ class UserRegistrationView(View):
     
     def _register_user(self, form) -> RegistrationResult:
         """
-        Process user registration, creating appropriate profile based on role.
+        Process user registration, creating student profile.
         
         Args:
             form: Valid RegistrationForm instance
@@ -134,29 +132,14 @@ class UserRegistrationView(View):
         """
         try:
             with transaction.atomic():
-                # Get form data
-                role = form.cleaned_data['role']
+                # Create user account
+                user = form.save()
                 
-                # Create user account (don't save yet)
-                user = form.save(commit=False)
-                
-                # Set any additional user fields if needed
-                user.email = form.cleaned_data['email']
-                user.save()
-                
-                # Create role-specific profile
-                if role == 'teacher':
-                    Teacher.objects.create(user=user)
-                elif role == 'student':
-                    Student.objects.create(user=user)
-                else:
-                    # Invalid role
-                    raise ValueError(f"Invalid role: {role}")
+                # Always create student profile for public registration
+                Student.objects.create(user=user)
                 
                 # Set the backend for authentication
                 user.backend = 'django.contrib.auth.backends.ModelBackend'
-                
-                # We don't actually log in the user here because we don't have access to request
                 
                 # Return success result
                 return RegistrationResult(
