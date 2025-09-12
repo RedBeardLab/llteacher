@@ -17,11 +17,6 @@ User = get_user_model()
 class RegistrationForm(UserCreationForm):
     """Form for student registration."""
     
-    email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={
-        'class': 'form-control',
-        'placeholder': 'Email address'
-    }))
-    
     first_name = forms.CharField(required=True, widget=forms.TextInput(attrs={
         'class': 'form-control',
         'placeholder': 'First name'
@@ -38,7 +33,41 @@ class RegistrationForm(UserCreationForm):
     
     def __init__(self, *args, **kwargs):
         super(RegistrationForm, self).__init__(*args, **kwargs)
-        # Override default labels and help texts
+        
+        # Generate dynamic pattern and title based on allowed domains
+        allowed_domains = getattr(settings, 'ALLOWED_EMAIL_DOMAINS', [])
+        if allowed_domains:
+            # Create regex pattern for multiple domains
+            # Example: for ['uw.edu', 'washington.edu'] -> (uw\.edu|washington\.edu)
+            escaped_domains = [domain.replace('.', r'\.') for domain in allowed_domains]
+            domains_pattern = '|'.join(escaped_domains)
+            pattern = f'.+@(.+)*({domains_pattern})$'
+            
+            # Create user-friendly title message
+            if len(allowed_domains) == 1:
+                domain_text = f"@{allowed_domains[0]} or subdomain"
+            else:
+                domain_list = ', '.join(f"@{domain}" for domain in allowed_domains[:-1])
+                domain_text = f"{domain_list}, or @{allowed_domains[-1]} (including subdomains)"
+            
+            title = f'Please enter a valid email address from allowed domains: {domain_text}'
+        else:
+            # No domain restrictions
+            pattern = None
+            title = 'Please enter a valid email address'
+        
+        # Update email field widget attributes
+        email_attrs = {
+            'class': 'form-control',
+            'placeholder': 'Email address',
+            'title': title  # Always set title, even when no pattern
+        }
+        if pattern:
+            email_attrs['pattern'] = pattern
+        
+        self.fields['email'] = forms.EmailField(required=True, widget=forms.EmailInput(attrs=email_attrs))
+        
+        # Override default labels and help texts for password fields
         self.fields['password1'].widget = forms.PasswordInput(attrs={
             'class': 'form-control',
             'placeholder': 'Password'

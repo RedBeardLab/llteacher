@@ -253,3 +253,83 @@ class TestDomainValidationIntegration(TestCase):
             form = RegistrationForm(data=form_data)
             # Should be valid when no domains are configured
             self.assertTrue(form.is_valid(), f"Form errors: {form.errors}")
+
+
+class TestClientSideValidationPatterns(TestCase):
+    """Test client-side validation pattern generation."""
+    
+    def test_single_domain_pattern_generation(self):
+        """Test HTML pattern generation for single domain."""
+        with self.settings(ALLOWED_EMAIL_DOMAINS=['uw.edu']):
+            form = RegistrationForm()
+            email_field = form.fields['email']
+            
+            pattern = email_field.widget.attrs.get('pattern')
+            title = email_field.widget.attrs.get('title')
+            
+            expected_pattern = r'.+@(.+)*(uw\.edu)$'
+            expected_title = 'Please enter a valid email address from allowed domains: @uw.edu or subdomain'
+            
+            self.assertEqual(pattern, expected_pattern)
+            self.assertEqual(title, expected_title)
+    
+    def test_multiple_domains_pattern_generation(self):
+        """Test HTML pattern generation for multiple domains."""
+        with self.settings(ALLOWED_EMAIL_DOMAINS=['uw.edu', 'washington.edu', 'example.org']):
+            form = RegistrationForm()
+            email_field = form.fields['email']
+            
+            pattern = email_field.widget.attrs.get('pattern')
+            title = email_field.widget.attrs.get('title')
+            
+            expected_pattern = r'.+@(.+)*(uw\.edu|washington\.edu|example\.org)$'
+            expected_title = 'Please enter a valid email address from allowed domains: @uw.edu, @washington.edu, or @example.org (including subdomains)'
+            
+            self.assertEqual(pattern, expected_pattern)
+            self.assertEqual(title, expected_title)
+    
+    def test_no_domain_restrictions_pattern(self):
+        """Test HTML pattern when no domain restrictions are set."""
+        with self.settings(ALLOWED_EMAIL_DOMAINS=[]):
+            form = RegistrationForm()
+            email_field = form.fields['email']
+            
+            pattern = email_field.widget.attrs.get('pattern')
+            title = email_field.widget.attrs.get('title')
+            
+            # Should have no pattern when no restrictions
+            self.assertIsNone(pattern)
+            self.assertEqual(title, 'Please enter a valid email address')
+    
+    def test_pattern_html_rendering(self):
+        """Test that pattern attributes are properly rendered in HTML."""
+        with self.settings(ALLOWED_EMAIL_DOMAINS=['uw.edu']):
+            form = RegistrationForm()
+            email_field = form.fields['email']
+            
+            html_output = str(email_field.widget.render('email', None))
+            
+            # Verify the HTML contains our pattern and title attributes
+            self.assertIn('pattern=', html_output)
+            self.assertIn('uw\.edu', html_output)
+            self.assertIn('title=', html_output)
+            self.assertIn('allowed domains', html_output)
+    
+    def test_special_characters_in_domains(self):
+        """Test proper escaping of special regex characters in domains."""
+        with self.settings(ALLOWED_EMAIL_DOMAINS=['test.edu', 'sub.domain.edu']):
+            form = RegistrationForm()
+            email_field = form.fields['email']
+            
+            pattern = email_field.widget.attrs.get('pattern')
+            
+            # Pattern should not be None for this test
+            self.assertIsNotNone(pattern)
+            
+            # Ensure pattern is a string before using string methods
+            if pattern:
+                # Dots should be escaped in the pattern
+                self.assertIn(r'test\.edu', pattern)
+                self.assertIn(r'sub\.domain\.edu', pattern)
+                # Should not contain unescaped dots that would match any character
+                self.assertNotIn('test.edu', pattern.replace(r'test\.edu', ''))
