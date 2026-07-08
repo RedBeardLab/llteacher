@@ -1,0 +1,35 @@
+FROM node:24-alpine AS build
+
+WORKDIR /app
+COPY package.json package-lock.json turbo.json ./
+COPY apps/web/package.json apps/web/package.json
+COPY apps/admin/package.json apps/admin/package.json
+COPY packages/ui/package.json packages/ui/package.json
+COPY infra/package.json infra/package.json
+RUN npm ci
+
+COPY apps/web apps/web
+COPY apps/admin apps/admin
+COPY packages/ui packages/ui
+RUN npm run build
+
+FROM node:24-alpine AS runtime
+
+ENV NODE_ENV=production \
+    PORT=8080
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY apps/web/package.json apps/web/package.json
+COPY apps/admin/package.json apps/admin/package.json
+COPY packages/ui/package.json packages/ui/package.json
+COPY infra/package.json infra/package.json
+RUN npm ci --omit=dev --ignore-scripts --workspace=llteacher-web --include-workspace-root=false \
+    && npm cache clean --force
+
+COPY --from=build /app/apps/web/dist /app/apps/web/dist
+COPY --from=build /app/apps/admin/dist /app/apps/admin/dist
+
+USER node
+EXPOSE 8080
+CMD ["node", "apps/web/dist/node/server.mjs"]

@@ -27,6 +27,9 @@ db.sqlite3
 *.md
 !README.md
 
+# Local infrastructure state
+infra/.pulumi/
+
 # Test and development files
 .coverage
 htmlcov/
@@ -49,6 +52,10 @@ Thumbs.db
 # Development tools
 .clinerules/
 .claude/
+node_modules/
+**/node_modules/
+.turbo/
+**/dist/
 
 # Legacy documentation
 legacy_documentation/
