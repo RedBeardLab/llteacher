@@ -136,3 +136,7 @@ staticfiles/
 node_modules/
 .turbo/
 .turbo-cache/
+
+# Pulumi local state and generated environment files
+infra/.pulumi/
+infra/.env

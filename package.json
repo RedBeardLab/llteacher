@@ -6,7 +6,8 @@
   "workspaces": [
     "apps/web",
     "apps/admin",
-    "packages/*"
+    "packages/*",
+    "infra"
   ],
   "scripts": {
     "build": "turbo run build",
